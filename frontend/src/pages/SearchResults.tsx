@@ -5,6 +5,9 @@ import RepoCard, { RepoData } from '@/components/RepoCard';
 import { ArrowLeft, Search } from 'lucide-react';
 import TetrisLoading from '@/components/ui/tetris-loader';
 
+// API Configuration from environment variables
+const SEARCH_API_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:8000/search';
+
 // Combined repository data from all pages for search
 const allRepositories: RepoData[] = [
   // From Home page
@@ -237,7 +240,7 @@ const searchRepositories = async (query: string): Promise<RepoData[]> => {
   
   try {
     // Make API call to external search service
-    const response = await fetch('http://10.7.3.122:8000/search', {
+    const response = await fetch(SEARCH_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -310,7 +313,7 @@ const SearchResults = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const query = location.state?.query || '';
-  
+
   const [searchResults, setSearchResults] = useState<RepoData[]>([]);
   const [currentQuery, setCurrentQuery] = useState(query);
   const [isLoading, setIsLoading] = useState(false);
@@ -428,10 +431,10 @@ const SearchResults = () => {
                 <h2 className="text-2xl font-bold text-foreground mb-2">
                   Search Results
                 </h2>
-                <p className="text-muted-foreground">
+            <p className="text-muted-foreground">
                   Found {searchResults.length} repositories matching "{currentQuery}"
-                </p>
-              </div>
+            </p>
+          </div>
               
               <div className="grid grid-cols-1 gap-6 mb-12">
                 {searchResults.map((repo, index) => (
@@ -446,8 +449,8 @@ const SearchResults = () => {
                       isHighlight={false}
                     />
                   </div>
-                ))}
-              </div>
+            ))}
+          </div>
             </>
           ) : query ? (
             <div className="text-center py-12">
