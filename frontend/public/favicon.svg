@@ -1,0 +1,17 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" rx="6" fill="#0d1117"/>
+  
+  <!-- Main contribution star (larger and more prominent) -->
+  <path d="M16 4 L18.5 9.5 L24.5 9.5 L20 13.5 L21.5 19.5 L16 16 L10.5 19.5 L12 13.5 L7.5 9.5 L13.5 9.5 Z" fill="#ffd700" stroke="#ffd700" stroke-width="0.5"/>
+  
+  <!-- Plus sign in center representing adding/contributing -->
+  <rect x="15" y="13" width="2" height="6" fill="#0d1117"/>
+  <rect x="13" y="15" width="6" height="2" fill="#0d1117"/>
+  
+  <!-- Small stars around representing multiple contributions -->
+  <path d="M8 22 L8.5 23.5 L10 23.5 L8.5 24.5 L9 26 L8 25 L7 26 L7.5 24.5 L6 23.5 L7.5 23.5 Z" fill="#58a6ff"/>
+  <path d="M24 22 L24.5 23.5 L26 23.5 L24.5 24.5 L25 26 L24 25 L23 26 L23.5 24.5 L22 23.5 L23.5 23.5 Z" fill="#58a6ff"/>
+  
+  <!-- Contribution lines/graph -->
+  <path d="M12 26 L16 24 L20 26" stroke="#00ff88" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

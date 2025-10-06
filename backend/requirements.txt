@@ -1,0 +1,10 @@
+fastapi==0.115.4
+uvicorn[standard]==0.24.0.post1
+pydantic==2.9.2
+google-genai==1.38.0
+python-dotenv==1.0.0
+sentence-transformers>=3.0.0
+huggingface-hub>=0.20.0
+weaviate-client==4.10.4
+tqdm==4.66.1
+requests>=2.31.0
