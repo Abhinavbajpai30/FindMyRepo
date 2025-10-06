@@ -1,4 +1,4 @@
-## 🔎 FindMyRepo
+# 🔎 FindMyRepo
 
 An AI-powered search engine and chatbot that helps you discover open-source GitHub repositories using natural language. 🤖 Queries are converted to executable Weaviate searches via Gemini, and results are served through a FastAPI backend to a modern React + Vite frontend.
 
