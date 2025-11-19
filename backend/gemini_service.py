@@ -10,6 +10,16 @@ class GeminiService:
         self.client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
         self.model = "gemini-2.0-flash"
         
+    def gemini_request(self, user_query: str) -> str:
+        """Call Gemini API with a raw user query and return the generated content."""
+        print(user_query, "user_query")
+        response = self.client.models.generate_content(
+            model=self.model,
+            contents=user_query,
+            config=types.GenerateContentConfig(temperature=0.2)
+        )
+        return response.text.strip()
+
     def generate_weaviate_code(self, user_query: str) -> str:
         """Convert natural language query to Weaviate Python code"""
         
@@ -377,3 +387,4 @@ User Query: """ + f'"{user_query}"'
         generated_code = generated_code.strip()
 
         return generated_code
+        

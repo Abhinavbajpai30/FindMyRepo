@@ -52,7 +52,6 @@ class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000, description="Natural language search query")
     limit: Optional[int] = Field(10, ge=1, le=50, description="Maximum number of results to return")
 
-
 class SearchResponse(BaseModel):
     success: bool
     query: str
@@ -93,6 +92,9 @@ class RepositoryFilters(BaseModel):
     name_contains: Optional[str] = Field(None, description="Filter repositories where name contains this text")
     description_contains: Optional[str] = Field(None, description="Filter repositories where description contains this text")
 
+class GeminiQueryRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=1000, description="Query to send to Gemini")
+
 # Global service instances (in production, consider using dependency injection)
 gemini_service = GeminiService()
 weaviate_service = WeaviateService()
@@ -100,7 +102,7 @@ weaviate_service = WeaviateService()
 @app.get("/")
 async def root():
     """Health check endpoint"""
-    return {"message": "FindMyRepo API is running", "status": "healthy"}
+    return {"status": "healthy"}
 
 @app.get("/health")
 async def health_check():
@@ -191,6 +193,18 @@ async def search_repositories(request: SearchRequest):
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+@app.post("/query")
+async def gemini_query(request: GeminiQueryRequest):
+    """
+    Send a query directly to Gemini and return the generated response.
+    """
+    try:
+        result = gemini_service.gemini_request(request.query)
+        return {"success": True, "result": result}
+    except Exception as e:
+        logger.error(f"Error in /query endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to query Gemini: {str(e)}")
 
 @app.get("/allrepos", response_model=PaginatedResponse)
 async def get_all_repositories(

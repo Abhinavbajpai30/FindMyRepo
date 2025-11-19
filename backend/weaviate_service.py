@@ -1,4 +1,3 @@
-from sentence_transformers import SentenceTransformer
 import weaviate
 from weaviate.classes.init import Auth
 from dotenv import load_dotenv
@@ -9,7 +8,6 @@ load_dotenv()
 
 class WeaviateService:
     def __init__(self):
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
         self.client = weaviate.connect_to_weaviate_cloud(
             cluster_url="rsrcqrmr9opgyhsz2katg.c0.asia-southeast1.gcp.weaviate.cloud",
             auth_credentials=Auth.api_key(os.getenv('WEAVIATE_API_KEY')),
@@ -21,7 +19,6 @@ class WeaviateService:
         # Set up the execution environment
         exec_globals = {
             'client': self.client,
-            'model': self.model,
             'query_text': query_text,
             'results': None
         }

@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: findmyrepo-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free  # Change to starter/standard for production
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: PORT
+        value: "10000"
+    # Add your secrets in Render Dashboard:
+    # - GEMINI_API_KEY
+    # - WEAVIATE_URL
+    # - Any other required environment variables
