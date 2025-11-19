@@ -11,9 +11,10 @@ load_dotenv()
 
 def main():
     print("🚀 Loading repos data...")
-    with open('github_repos_enriched_final_main_final.json', 'r', encoding='utf-8') as f:
-        repos = json.load(f)
-
+    with open('github_repos_enriched_final_main.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    
+    repos = data['repositories']
     print(f"📦 Loaded {len(repos)} repos")
 
     # Load embedding model
@@ -24,7 +25,7 @@ def main():
     # Initialize Weaviate
     print("💾 Initializing Weaviate...")
     client = weaviate.connect_to_weaviate_cloud(
-        cluster_url="rsrcqrmr9opgyhsz2katg.c0.asia-southeast1.gcp.weaviate.cloud",
+        cluster_url=os.getenv('WEAVIATE_URL'),
         auth_credentials=Auth.api_key(os.getenv('WEAVIATE_API_KEY')),
     )
 
