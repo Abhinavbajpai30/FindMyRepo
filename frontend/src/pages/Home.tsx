@@ -1,155 +1,147 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import RepoCard, { RepoData } from '@/components/RepoCard';
 import { usePreferences } from '@/contexts/PreferencesContext';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { ArrowRight, Sparkles, Loader2 } from 'lucide-react';
 import ParticleHero from '@/components/ParticleHero';
 import AccentLines from '@/components/AccentLines';
 import { HeroPromptInput } from '@/components/HeroPromptInput';
 
-// Mock recommended repos - in production, these would come from an API
-const mockRecommendedRepos: RepoData[] = [
-  {
-    name: 'first-contributions',
-    description: 'Help beginners make their first open source contribution. This repository is perfect for newcomers to open source.',
-    languages: ['JavaScript', 'HTML', 'CSS'],
-    stars: 42000,
-    lastActivity: '2 days ago',
-    issues: 12,
-    charging: 'active',
-    url: 'https://github.com/firstcontributions/first-contributions',
-    owner: 'firstcontributions',
-  },
-  {
-    name: 'awesome-for-beginners',
-    description: 'A list of awesome beginners-friendly projects. Curated list of projects that welcome new contributors.',
-    languages: ['Markdown', 'JavaScript'],
-    stars: 38000,
-    lastActivity: '2 months ago',
-    issues: 73,
-    charging: 'medium',
-    url: 'https://github.com/MunGell/awesome-for-beginners',
-    owner: 'MunGell',
-  },
-  {
-    name: 'scikit-learn',
-    description: 'Machine learning in Python. Simple and efficient tools for predictive data analysis.',
-    languages: ['Python', 'Cython', 'C++'],
-    stars: 59000,
-    lastActivity: '1 day ago',
-    issues: 89,
-    charging: 'active',
-    url: 'https://github.com/scikit-learn/scikit-learn',
-    owner: 'scikit-learn',
-  },
-  {
-    name: 'react',
-    description: 'A declarative, efficient, and flexible JavaScript library for building user interfaces.',
-    languages: ['JavaScript', 'TypeScript', 'HTML'],
-    stars: 220000,
-    lastActivity: '3 hours ago',
-    issues: 1247,
-    charging: 'active',
-    url: 'https://github.com/facebook/react',
-    owner: 'facebook',
-  },
-  {
-    name: 'tensorflow',
-    description: 'An Open Source Machine Learning Framework for Everyone.',
-    languages: ['Python', 'C++', 'JavaScript'],
-    stars: 180000,
-    lastActivity: '5 hours ago',
-    issues: 892,
-    charging: 'active',
-    url: 'https://github.com/tensorflow/tensorflow',
-    owner: 'tensorflow',
-  },
-  {
-    name: 'vue',
-    description: 'This is the repo for Vue 3. Vue 3 is the latest version of Vue.js.',
-    languages: ['TypeScript', 'JavaScript', 'CSS'],
-    stars: 41000,
-    lastActivity: '1 day ago',
-    issues: 456,
-    charging: 'active',
-    url: 'https://github.com/vuejs/vue',
-    owner: 'vuejs',
-  },
-  {
-    name: 'django',
-    description: 'The Web framework for perfectionists with deadlines.',
-    languages: ['Python', 'HTML', 'CSS'],
-    stars: 75000,
-    lastActivity: '2 days ago',
-    issues: 234,
-    charging: 'active',
-    url: 'https://github.com/django/django',
-    owner: 'django',
-  },
-  {
-    name: 'express',
-    description: 'Fast, unopinionated, minimalist web framework for node.',
-    languages: ['JavaScript', 'HTML', 'CSS'],
-    stars: 63000,
-    lastActivity: '1 week ago',
-    issues: 189,
-    charging: 'medium',
-    url: 'https://github.com/expressjs/express',
-    owner: 'expressjs',
-  },
-  {
-    name: 'pytorch',
-    description: 'Tensors and Dynamic neural networks in Python with strong GPU acceleration.',
-    languages: ['Python', 'C++', 'CUDA'],
-    stars: 75000,
-    lastActivity: '4 hours ago',
-    issues: 567,
-    charging: 'active',
-    url: 'https://github.com/pytorch/pytorch',
-    owner: 'pytorch',
-  },
-  {
-    name: 'next.js',
-    description: 'The React Framework for Production.',
-    languages: ['TypeScript', 'JavaScript', 'CSS'],
-    stars: 120000,
-    lastActivity: '6 hours ago',
-    issues: 789,
-    charging: 'active',
-    url: 'https://github.com/vercel/next.js',
-    owner: 'vercel',
-  },
-  {
-    name: 'fastapi',
-    description: 'FastAPI framework, high performance, easy to learn, fast to code, ready for production.',
-    languages: ['Python', 'JavaScript', 'HTML'],
-    stars: 68000,
-    lastActivity: '1 day ago',
-    issues: 123,
-    charging: 'active',
-    url: 'https://github.com/tiangolo/fastapi',
-    owner: 'tiangolo',
-  },
-];
+// --- Types ---
+
+// Matches the Python Pydantic model from your backend
+interface BackendRepository {
+  name: string;
+  full_name: string;
+  description: string;
+  url: string;
+  language: string;
+  languages: string[];
+  stars: number;
+  open_issues: number;
+  updated_at: string;
+  topics: string[];
+  owner?: string; // Assuming you might add this to backend, or we extract from full_name
+}
+
+// --- Utility Functions ---
+
+const calculateRelativeTime = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 30) return `${diffDays} days ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+  return `${Math.floor(diffDays / 365)} years ago`;
+};
+
+const mapBackendToRepoData = (backendData: BackendRepository): RepoData => {
+  // Extract owner from full_name (e.g., "facebook/react" -> "facebook")
+  const owner = backendData.full_name.split('/')[0] || 'unknown';
+  
+  return {
+    name: backendData.name,
+    description: backendData.description || 'No description provided.',
+    languages: backendData.languages.length > 0 ? backendData.languages : [backendData.language],
+    stars: backendData.stars,
+    lastActivity: calculateRelativeTime(backendData.updated_at),
+    issues: backendData.open_issues,
+    // Simple logic to determine "charging" status based on activity
+    charging: backendData.open_issues > 20 ? 'active' : 'medium', 
+    url: backendData.url,
+    owner: owner,
+  };
+};
+
+// --- Component ---
 
 const Home = () => {
   const navigate = useNavigate();
   const { preferences, hasCompletedOnboarding } = usePreferences();
+  
   const [query, setQuery] = useState('');
+  
+  // State for Repos
+  const [repos, setRepos] = useState<RepoData[]>([]);
   const [visibleRepos, setVisibleRepos] = useState(5);
-
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const USER_PREFERENCES_API = import.meta.env.VITE_USER_PREFERENCES_API || 'http://localhost:8000/userpreferences';
   const placeholders = [
     "Find beginner-friendly Python projects with good first issues",
     "Discover trending React repositories for contributors",
     "Search for machine learning projects with documentation needs",
     "Look for JavaScript libraries accepting new contributors",
-    "Find open source projects with Hacktoberfest tags",
-    "Discover web development repositories for beginners",
-    "Search for AI/ML projects with active communities",
-    "Find TypeScript projects with good documentation",
   ];
+
+  // 
+  // 1. Check Local Storage -> 2. If Empty, Call API -> 3. Save to State & Local Storage
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      if (!hasCompletedOnboarding || !preferences) return;
+
+      // 1. Check Local Storage first
+      const cachedData = localStorage.getItem('personalizedRepos');
+      if (cachedData) {
+        console.log("Loading repositories from local cache");
+        setRepos(JSON.parse(cachedData));
+        return;
+      }
+
+      // 2. If no cache, fetch from API
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Replace with your actual backend URL
+
+        console.log("Fetching repositories from backend based on preferences:", preferences);
+        const response = await fetch(USER_PREFERENCES_API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          // The context structure matches the backend Pydantic model
+          body: JSON.stringify({
+            primaryDomains: preferences.primaryDomains, // Mapping context naming to backend naming
+            role: preferences.role, // Using skillLevel as role context
+            expertise: preferences.expertise,
+            preferredLanguages: preferences.preferredLanguages
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch recommendations');
+        }
+
+        const data = await response.json();
+        
+        if (data.success && Array.isArray(data.results)) {
+          const formattedRepos = data.results.map(mapBackendToRepoData);
+          
+          // 3. Save to state and Cache
+          setRepos(formattedRepos);
+          localStorage.setItem('personalizedRepos', JSON.stringify(formattedRepos));
+        } else {
+          setError('No results found for your preferences.');
+        }
+
+      } catch (err) {
+        console.error("Error fetching repos:", err);
+        setError('Failed to load recommendations. Please try again later.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRecommendations();
+  }, [hasCompletedOnboarding, preferences]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setQuery(e.target.value);
@@ -162,12 +154,11 @@ const Home = () => {
   };
 
   const handleLoadMore = () => {
-    setVisibleRepos(prev => Math.min(prev + 5, mockRecommendedRepos.length));
+    setVisibleRepos(prev => Math.min(prev + 5, repos.length));
   };
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      {/* Background Effects - Extended throughout entire page */}
       <div className="fixed inset-0 bg-gradient-to-br from-background via-background to-primary/5"></div>
       <ParticleHero />
       <AccentLines />
@@ -179,7 +170,6 @@ const Home = () => {
         <section className="flex flex-col justify-start pt-56 pb-8">
           <div className="container-modern">
             <div className="max-w-5xl mx-auto">
-              {/* Main heading */}
               <div className="text-center mb-4 animate-fade-in">
                 <h1 className="text-3xl sm:text-4xl lg:text-5xl text-white mb-2 leading-tight tracking-tight font-bold">
                   What do you want to discover?
@@ -189,7 +179,6 @@ const Home = () => {
                 </p>
               </div>
               
-              {/* Search Section */}
               <div className="max-w-4xl mx-auto mb-0 animate-slide-up">
                 <div className="relative group">
                   <div className="p-4">
@@ -200,13 +189,10 @@ const Home = () => {
                       placeholders={placeholders}
                     />
                   </div>
-                  
-                  {/* Subtle glow effect */}
                   <div className="absolute inset-0 bg-gradient-to-r from-primary/8 via-primary/3 to-primary/8 rounded-3xl blur-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-700"></div>
                 </div>
               </div>
 
-              {/* CTA Section */}
               {!hasCompletedOnboarding && (
                 <div className="text-center animate-slide-up">
                   <Button
@@ -223,49 +209,80 @@ const Home = () => {
           </div>
         </section>
 
-
         {/* Featured Section */}
         <section className="pb-16 sm:pb-20 lg:pb-24 relative rounded-t-[64px] border-t border-border/50 mx-6 mt-48" style={{ backgroundColor: '#080D0F', paddingTop: '80px' }}>
           <div className="container-modern relative z-10">
             <div className="text-center mb-16">
               <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-6 code-text">
-                Personalized Repositories
+                {hasCompletedOnboarding ? 'Personalized For You' : 'Trending Repositories'}
               </h2>
               <p className="text-muted-foreground text-lg leading-relaxed code-text">
-                Discover repositories tailored to your interests and skill level
+                {hasCompletedOnboarding 
+                  ? 'AI-curated repositories based on your preferences'
+                  : 'Discover repositories tailored to your interests and skill level'}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 mb-12 max-w-4xl mx-auto">
-              {mockRecommendedRepos.slice(0, visibleRepos).map((repo, index) => (
-                <div 
-                  key={repo.name} 
-                  className={`transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 animate-slide-up cursor-pointer ${
-                    index === 1 ? 'animate-delay-150ms' : '' 
-                  } ${index === 2 ? 'animate-delay-300ms' : ''}`}
-                >
-                  <RepoCard 
-                    repo={repo} 
-                    isHighlight={false}
-                  />
-                </div>
-              ))}
-            </div>
+            {/* Loading State */}
+            {isLoading && (
+               <div className="flex flex-col items-center justify-center py-20">
+                 <Loader2 className="h-10 w-10 text-primary animate-spin mb-4" />
+                 <p className="text-muted-foreground">Curating your feed...</p>
+               </div>
+            )}
 
-            {visibleRepos < mockRecommendedRepos.length && (
-              <div className="text-center">
-                <Button 
-                  onClick={handleLoadMore}
-                  variant="outline" 
-                  className="btn-secondary group relative overflow-hidden"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                  <span className="relative flex items-center">
-                    Load More ({mockRecommendedRepos.length - visibleRepos} remaining)
-                    <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </span>
+            {/* Error State */}
+            {!isLoading && error && (
+              <div className="text-center py-10">
+                <p className="text-red-400 mb-4">{error}</p>
+                <Button onClick={() => window.location.reload()} variant="outline">
+                  Try Again
                 </Button>
               </div>
+            )}
+
+            {/* Empty State (No preferences) */}
+            {!isLoading && !error && repos.length === 0 && (
+              <div className="text-center py-10">
+                 <p className="text-muted-foreground mb-4">Complete onboarding to see personalized results.</p>
+                 <Button onClick={() => navigate('/onboarding')}>Start Onboarding</Button>
+              </div>
+            )}
+
+            {/* Results Grid */}
+            {!isLoading && repos.length > 0 && (
+              <>
+                <div className="grid grid-cols-1 gap-6 mb-12 max-w-4xl mx-auto">
+                  {repos.slice(0, visibleRepos).map((repo, index) => (
+                    <div 
+                      key={repo.name} 
+                      className={`transform transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 animate-slide-up cursor-pointer`}
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <RepoCard 
+                        repo={repo} 
+                        isHighlight={false}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {visibleRepos < repos.length && (
+                  <div className="text-center">
+                    <Button 
+                      onClick={handleLoadMore}
+                      variant="outline" 
+                      className="btn-secondary group relative overflow-hidden"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                      <span className="relative flex items-center">
+                        Load More ({repos.length - visibleRepos} remaining)
+                        <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
