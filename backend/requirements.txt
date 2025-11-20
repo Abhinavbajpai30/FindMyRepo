@@ -7,3 +7,4 @@ huggingface-hub>=0.20.0
 weaviate-client==4.10.4
 tqdm==4.66.1
 requests>=2.31.0
+light-embed>=0.2.3
