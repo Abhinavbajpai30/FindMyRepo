@@ -95,6 +95,12 @@ class RepositoryFilters(BaseModel):
 class GeminiQueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=1000, description="Query to send to Gemini")
 
+class UserPreferences(BaseModel):
+    primaryDomains: List[str] = Field(..., description="Areas of interest like Frontend, Backend, AI")
+    role: str = Field(..., description="User role like Student, Professional")
+    expertise: str = Field(..., description="Skill level like Beginner, Expert")
+    preferredLanguages: List[str] = Field(..., description="List of preferred programming languages")
+
 # Global service instances (in production, consider using dependency injection)
 gemini_service = GeminiService()
 weaviate_service = WeaviateService()
@@ -602,6 +608,87 @@ async def get_hidden_gems(
             pagination={},
             error=f"Failed to fetch hidden gems: {str(e)}"
         )
+
+@app.post("/userpreferences", response_model=SearchResponse)
+async def search_by_preferences(prefs: UserPreferences):
+    """
+    Generates a personalized repository search based on user profile and preferences.
+    
+    This endpoint:
+    1. Converts the structured UserPreferences JSON into a context-rich natural language query.
+    2. Sends this query to Gemini to generate Weaviate filtering code.
+    3. Executes the search to find the best matching repositories.
+    """
+    try:
+        logger.info(f"Processing preferences for role: {prefs.role}, expertise: {prefs.expertise}")
+
+        # 1. Construct a semantic natural language query from the structured data
+        # We build a prompt that guides Gemini to look for specific attributes based on expertise
+        
+        query_parts = [
+            f"Find GitHub repositories suitable for a {prefs.role} with {prefs.expertise} level expertise.",
+            f"They are interested in these domains: {', '.join(prefs.primaryDomains)}.",
+            f"They prefer using these languages: {', '.join(prefs.preferredLanguages)}."
+        ]
+
+        # Add logic to tailor the search based on expertise
+        if "beginner" in prefs.expertise.lower() or "student" in prefs.role.lower():
+            query_parts.append("Prioritize repositories that have good documentation, are marked as 'good first issue', or are educational.")
+        elif "expert" in prefs.expertise.lower() or "senior" in prefs.role.lower():
+            query_parts.append("Prioritize complex, high-performance, or architectural projects.")
+
+        # Combine into a single string
+        constructed_query = " ".join(query_parts)
+        logger.info(f"Constructed Semantic Query: {constructed_query}")
+
+        # 2. Generate Weaviate code using Gemini (reusing existing service)
+        try:
+            generated_code = gemini_service.generate_weaviate_code(constructed_query)
+            logger.info(f"Generated code based on preferences: {generated_code[:100]}...")
+        except Exception as e:
+            logger.error(f"Gemini service error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to process preferences with AI: {str(e)}")
+
+        # 3. Execute search using Weaviate
+        try:
+            search_results = weaviate_service.search(constructed_query, generated_code)
+        except Exception as e:
+            logger.error(f"Weaviate service error: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to execute preference search: {str(e)}")
+
+        # 4. Format response (Reuse existing SearchResponse structure)
+        if not search_results.get('success', False):
+            return SearchResponse(
+                success=False,
+                query=constructed_query,
+                results_count=0,
+                results=[],
+                error=search_results.get('error', 'Unknown error'),
+                generated_code=search_results.get('generated_code')
+            )
+
+        results = search_results.get('results', [])
+        
+        # Default limit for preference search
+        limit = 20
+        if len(results) > limit:
+            results = results[:limit]
+
+        repositories = [Repository(**repo) for repo in results]
+
+        return SearchResponse(
+            success=True,
+            query=constructed_query,  # Return the constructed query so the user sees how their profile was interpreted
+            results_count=len(repositories),
+            results=repositories,
+            generated_code=search_results.get('generated_code')
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in /userpreferences: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @app.on_event("shutdown")
 async def shutdown_event():

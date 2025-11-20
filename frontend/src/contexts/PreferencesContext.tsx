@@ -1,11 +1,10 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface UserPreferences {
-  skillLevel: string;
-  languages: string[];
-  interestAreas: string[];
-  contributionIntent: string;
-  timeAvailability: string;
+  expertise: string;
+  preferredLanguages: string[];
+  primaryDomains: string[];
+  role: string;
 }
 
 interface PreferencesContextType {
