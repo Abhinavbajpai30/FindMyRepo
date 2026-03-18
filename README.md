@@ -1,8 +1,8 @@
 # FindMyRepo
 [![CI Pipeline](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml)
 
-*[Demo GIF Placeholder]*
-*[Architecture Diagram Placeholder]*
+![Demo GIF](assets/demo.gif)
+![Architecture Diagram](assets/architecture.png)
 
 FindMyRepo is an AI-assisted platform for discovering open source GitHub repositories through natural language search.
 
