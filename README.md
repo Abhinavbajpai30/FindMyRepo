@@ -1,4 +1,8 @@
 # FindMyRepo
+[![CI Pipeline](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml)
+
+*[Demo GIF Placeholder]*
+*[Architecture Diagram Placeholder]*
 
 FindMyRepo is an AI-assisted platform for discovering open source GitHub repositories through natural language search.
 
@@ -26,7 +30,8 @@ FindMyRepo/
   backend/           # FastAPI service
   frontend/          # React + Vite client
   dataset_test/      # Dataset preparation utilities
-  push_to_db.py      # Data ingestion to Weaviate
+  data/              # Data storage (e.g., enriched GitHub repos JSON)
+  scripts/           # DB ingestion and utility scripts
 ```
 
 ## Prerequisites
@@ -139,7 +144,7 @@ docker compose --env-file .env.docker up --build
 
 To populate Weaviate with repository data:
 ```
-python push_to_db.py
+python scripts/push_to_db.py
 ```
 
 Behavior of `push_to_db.py`:
@@ -197,3 +202,9 @@ If `pip install -r requirements.txt` fails:
 ```
 python -m pip install --upgrade pip setuptools wheel
 ```
+
+## Engineering Decisions & Trade-offs
+
+- **Weaviate for Vector DB (Hybrid Search):** Selected Weaviate Cloud to gain both raw vector search (semantic retrieval) and metadata filtering. This solves the limitation of traditional databases when users search with natural language while preserving hard filters like language or stars.
+- **`all-MiniLM-L6-v2` Embeddings:** Picked this sentence-transformers model for highly efficient, low-latency text embeddings that run easily locally and inside standard Docker environments without needing expensive GPU hosts.
+- **Gemini AI Query Parsing:** Leveraged Gemini to dynamically convert user intent into Python Weaviate queries, handling complex nested logical parsing which would be difficult to implement with static heuristics.
