@@ -8,7 +8,7 @@ load_dotenv()
 class GeminiService:
     def __init__(self):
         self.client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-        self.model = "gemini-2.0-flash"
+        self.model = "gemini-2.5-flash"
         
     def gemini_request(self, user_query: str) -> str:
         """Call Gemini API with a raw user query and return the generated content."""

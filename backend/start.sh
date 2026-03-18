@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-# Railway provides PORT env (default 8080), fallback to 8080 if not set
-PORT=${PORT:-8080}
+# Railway provides PORT env (default 8000), fallback to 8000 if not set
+PORT=${PORT:-8000}
 
 echo "Starting FastAPI server on port $PORT"
 

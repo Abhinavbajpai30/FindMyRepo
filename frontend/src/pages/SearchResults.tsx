@@ -432,7 +432,7 @@ const SearchResults = () => {
                   Search Results
                 </h2>
             <p className="text-muted-foreground">
-                  Found {searchResults.length} repositories matching "{currentQuery}"
+              Found {searchResults.length} repositories matching "{query}"
             </p>
           </div>
               
