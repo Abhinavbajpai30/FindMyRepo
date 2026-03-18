@@ -12,7 +12,7 @@ class GeminiService:
         
     def gemini_request(self, user_query: str) -> str:
         """Call Gemini API with a raw user query and return the generated content."""
-        print(user_query, "user_query")
+        # print(user_query, "user_query")
         response = self.client.models.generate_content(
             model=self.model,
             contents=user_query,

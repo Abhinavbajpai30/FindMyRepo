@@ -90,6 +90,51 @@ npm run dev
 
 The frontend runs on `http://localhost:8080` by default.
 
+## Docker Setup
+
+This repository includes a Dockerized setup with compatible runtime versions:
+- Backend: Python 3.11 (`python:3.11-slim`)
+- Frontend build: Node.js 20 (`node:20-alpine`)
+- Frontend runtime: Nginx 1.27 (`nginx:1.27-alpine`)
+
+### Run with Docker Compose
+From the project root:
+
+```sh
+docker compose up --build
+```
+
+Access:
+- Frontend: `http://localhost:8080`
+- Backend API: `http://localhost:8000`
+
+Stop:
+
+```sh
+docker compose down
+```
+
+### Backend environment variables
+The backend service uses:
+- `backend/.env`
+
+Make sure this file contains valid values for:
+- `GEMINI_API_KEY`
+- `WEAVIATE_API_KEY`
+- `WEAVIATE_URL`
+
+### Optional frontend endpoint overrides
+Frontend URLs are injected at Docker build time using compose build args.
+
+If you want to override defaults:
+1. Copy `.env.docker.example` to `.env.docker`
+2. Edit values in `.env.docker`
+3. Run compose with that env file:
+
+```sh
+docker compose --env-file .env.docker up --build
+```
+
 ## Data Ingestion
 
 To populate Weaviate with repository data:

@@ -27,7 +27,7 @@ class WeaviateService:
         }
         
         # Execute the generated code
-        print(generated_code)
+        # print(generated_code)
         exec(generated_code, exec_globals)
         
         # Get the results
