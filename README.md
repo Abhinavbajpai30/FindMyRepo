@@ -1,210 +1,237 @@
-# FindMyRepo
+<div align="center">
+
+# 🔎 FindMyRepo
+
 [![CI Pipeline](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml/badge.svg)](https://github.com/Abhinavbajpai30/FindMyRepo/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white)
+![React](https://img.shields.io/badge/React-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=flat-square&logo=fastapi)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat-square&logo=docker&logoColor=white)
+![Weaviate](https://img.shields.io/badge/Weaviate-Vector_DB-13ce66?style=flat-square)
+![Gemini](https://img.shields.io/badge/Gemini-AI-4285F4?style=flat-square)
 
-![Demo GIF](assets/demo.gif)
-![Architecture Diagram](assets/architecture.png)
+**An AI-assisted platform for discovering open-source GitHub repositories through semantic natural language search.**
 
-FindMyRepo is an AI-assisted platform for discovering open source GitHub repositories through natural language search.
+</div>
 
-It combines:
-- A FastAPI backend for search and repository APIs.
-- Gemini for converting user prompts into executable Weaviate queries.
-- Weaviate Cloud as the vector and metadata store.
-- A React + Vite frontend for search, filtering, and personalized recommendations.
+---
 
-## Core Features
-- Natural language repository search.
-- Hybrid retrieval using vectors and metadata filters.
-- Hidden Gems listing for underrated projects.
-- Personalized recommendations based on onboarding preferences.
-- Paginated catalog with advanced filtering.
+## 📽️ See it in Action
 
-## Technology Stack
-- Backend: FastAPI, Pydantic, Weaviate Python Client, Google GenAI SDK.
-- Frontend: React, TypeScript, Vite, Tailwind CSS, shadcn/ui.
-- Data and embeddings: Weaviate Cloud, sentence-transformers (`all-MiniLM-L6-v2`).
+<div align="center">
+  <img src="assets/demo.gif" alt="FindMyRepo Demo" width="800" />
+</div>
 
-## Project Structure
-```
+<br />
+
+FindMyRepo moves beyond simple keyword matching. By leveraging **Gemini AI** and **Weaviate Vector DB**, we translate natural language queries into complex hybrid searches—allowing you to discover hidden gems, match exact constraints, and surface the most relevant repositories instantly.
+
+---
+
+## ✨ Core Features
+
+- 🧠 **Natural Language Search:** Describe what you're looking for natively, and the AI translates it to executable database constraints.
+- ⚡ **Hybrid Retrieval:** Blends state-of-the-art vector similarity (semantic meaning) with strict metadata filters (e.g., number of stars, forks, language).
+- 💎 **Hidden Gems:** A dedicated module for highlighting highly underrated, lesser-known projects you won't find on regular trending pages.
+- 🎯 **Personalized Recommendations:** Get repository suggestions tuned to your developer profile, role, and onboarding preferences.
+- 🧭 **Advanced Filtering:** Intuitive UI for combining paginated catalogs and hard constraint filters.
+
+---
+
+## 🏗 System Architecture & Decisions
+
+<div align="center">
+  <img src="assets/architecture.png" alt="Architecture Diagram" width="800" />
+</div>
+
+<br />
+
+### Engineering Trade-offs & Decisions
+
+*   **Weaviate as the Vector DB (Hybrid Search):** 
+    We selected Weaviate Cloud to fuse raw vector search (semantic retrieval) with exact BM25 metadata filtering. This overcomes the limitations of traditional DBs by allowing users to query using natural language while still preserving mandatory hard filters like `language=python` or `stars > 500`.
+*   **`all-MiniLM-L6-v2` Embeddings:** 
+    We chose this specific sentence-transformers model to ensure high-efficiency, low-latency text embeddings. It runs easily on local environments and standard Docker setups without necessitating expensive cloud GPU constraints.
+*   **Gemini AI Query Parsing:** 
+    By leveraging Google's Gemini Flash model dynamically, we translate unstructured user-intent directly into Python Weaviate queries. This acts as an intelligent intermediary that seamlessly handles complex, nested logical parsing that static heuristics simply cannot match.
+
+---
+
+## 💻 Tech Stack
+
+| Component         | Technology Used                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------ |
+| **Frontend**      | React, TypeScript, Vite, Tailwind CSS, shadcn/ui                                           |
+| **Backend**       | FastAPI, Pydantic, Weaviate Python Client, Google GenAI SDK                                |
+| **Data/AI Layer** | Weaviate Cloud, `sentence-transformers` (`all-MiniLM-L6-v2`), Gemini AI                    |
+| **Infrastructure**| Docker & Docker Compose                                                                    |
+
+---
+
+## 📂 Project Structure
+
+```text
 FindMyRepo/
-  backend/           # FastAPI service
-  frontend/          # React + Vite client
-  dataset_test/      # Dataset preparation utilities
-  data/              # Data storage (e.g., enriched GitHub repos JSON)
-  scripts/           # DB ingestion and utility scripts
+├── backend/            # FastAPI microservice
+├── frontend/           # React + Vite client application
+├── dataset_test/       # Dataset preparation & exploration utilities
+├── data/               # Persistent data storage (e.g., enriched GitHub repos JSON)
+└── scripts/            # Database ingestion and utility scripts (e.g., push_to_db.py)
 ```
 
-## Prerequisites
-- Python 3.11 or newer
-- Node.js 18 or newer
-- Weaviate Cloud cluster and API key
-- Gemini API key
+---
 
-## Environment Setup
+## 🚀 Getting Started
 
-Use the provided templates:
-- Root template for ingestion: `.env.example`
-- Backend template: `backend/.env.example`
-- Frontend template: `frontend/.env.example`
+### 📋 Prerequisites
 
-### Root `.env` (used by ingestion scripts)
-```
+- Python 3.11+
+- Node.js 18+ (Node 20 recommended)
+- Weaviate Cloud cluster URL and API key
+- Google Gemini API key
+
+### ⚙️ Environment Configuration
+
+Use the provided `.env.example` templates strategically across the project. 
+
+<details>
+<summary><b>1. Root <code>.env</code> (For Data Ingestion Scripts)</b></summary>
+
+```env
 WEAVIATE_API_KEY=your_weaviate_api_key
 WEAVIATE_URL=https://your-weaviate-cluster.weaviate.network
 ```
+</details>
 
-### Backend `backend/.env`
-```
+<details>
+<summary><b>2. Backend <code>backend/.env</code></b></summary>
+
+```env
 GEMINI_API_KEY=your_gemini_api_key
 WEAVIATE_API_KEY=your_weaviate_api_key
 WEAVIATE_URL=https://your-weaviate-cluster.weaviate.network
 ```
+</details>
 
-### Frontend `frontend/.env`
-```
+<details>
+<summary><b>3. Frontend <code>frontend/.env</code></b></summary>
+
+```env
 VITE_API_BASE_URL=http://localhost:8000
 VITE_SEARCH_API_URL=http://localhost:8000/search
 VITE_USER_PREFERENCES_API=http://localhost:8000/userpreferences
 VITE_ALL_REPOS_ENDPOINT=/allrepos
 VITE_HIDDEN_GEMS_ENDPOINT=/hiddengem
 ```
+</details>
 
-## Local Development
+<br/>
 
-### 1. Run the backend
+### 🐳 Run with Docker (Recommended)
+
+This repository includes a fully-configured Dockerized setup with compatible runtime environments.
+
+```bash
+# Start all services
+docker compose up --build
+
+# Access:
+# - Frontend: http://localhost:8080
+# - Backend API: http://localhost:8000
+
+# Tear down
+docker compose down
 ```
+
+*(Optional)* You can override Docker frontend endpoints by copying `.env.docker.example` to `.env.docker` and executing: `docker compose --env-file .env.docker up --build`
+
+### 💻 Local Development Setup
+
+<details>
+<summary><b>Running the Backend</b></summary>
+
+```bash
 cd backend
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+Health Check: `GET http://localhost:8000/health`
+</details>
 
-Notes:
-- All backend Python dependencies are managed in `backend/requirements.txt`.
-- Health checks:
-  - `GET http://localhost:8000/`
-  - `GET http://localhost:8000/health`
+<details>
+<summary><b>Running the Frontend</b></summary>
 
-### 2. Run the frontend
-```
+```bash
 cd frontend
 npm install
 npm run dev
 ```
+Client URL: `http://localhost:8080`
+</details>
 
-The frontend runs on `http://localhost:8080` by default.
+---
 
-## Docker Setup
+## 📥 Data Ingestion
 
-This repository includes a Dockerized setup with compatible runtime versions:
-- Backend: Python 3.11 (`python:3.11-slim`)
-- Frontend build: Node.js 20 (`node:20-alpine`)
-- Frontend runtime: Nginx 1.27 (`nginx:1.27-alpine`)
+To populate your Weaviate Cloud cluster with the GitHub repository catalog:
 
-### Run with Docker Compose
-From the project root:
-
-```sh
-docker compose up --build
-```
-
-Access:
-- Frontend: `http://localhost:8080`
-- Backend API: `http://localhost:8000`
-
-Stop:
-
-```sh
-docker compose down
-```
-
-### Backend environment variables
-The backend service uses:
-- `backend/.env`
-
-Make sure this file contains valid values for:
-- `GEMINI_API_KEY`
-- `WEAVIATE_API_KEY`
-- `WEAVIATE_URL`
-
-### Optional frontend endpoint overrides
-Frontend URLs are injected at Docker build time using compose build args.
-
-If you want to override defaults:
-1. Copy `.env.docker.example` to `.env.docker`
-2. Edit values in `.env.docker`
-3. Run compose with that env file:
-
-```sh
-docker compose --env-file .env.docker up --build
-```
-
-## Data Ingestion
-
-To populate Weaviate with repository data:
-```
+```bash
 python scripts/push_to_db.py
 ```
 
-Behavior of `push_to_db.py`:
-- Connects to Weaviate using `WEAVIATE_URL` and `WEAVIATE_API_KEY`.
-- Recreates the `Repos` collection.
-- Generates embeddings with `all-MiniLM-L6-v2`.
-- Batch inserts records from `github_repos_enriched_final_main.json`.
+**How it works:**
+1. Connects to Weaviate via your `WEAVIATE_URL`.
+2. Seamlessly recreates the `Repos` collection.
+3. Automatically generates semantic embeddings using `all-MiniLM-L6-v2`.
+4. Batch inserts all enriched records directly from the `data/` directory.
 
-Important:
-- This script deletes and recreates the `Repos` collection before insertion.
+---
 
-## API Overview
+## 🌐 API Overview
 
-Base URL (local): `http://localhost:8000`
+| Endpoint | Method | Description |
+| :--- | :---: | :--- |
+| `/search` | `POST` | Execute natural language semantic repository search. |
+| `/userpreferences` | `POST` | Generate tailored repository recommendations from onboarding profiles. |
+| `/allrepos` | `GET` | Fetch the paginated repository catalog with granular hard bounds. |
+| `/hiddengem` | `GET` | Surface underrated repository paginated results. |
+| `/example-queries` | `GET` | Retrieve valid sample prompts. |
 
-- `POST /search`: Natural language search.
-- `POST /userpreferences`: Recommendation search from onboarding profile.
-- `GET /allrepos`: Paginated repository catalog with filters.
-- `GET /hiddengem`: Paginated underrated repositories.
-- `GET /example-queries`: Sample prompts.
+---
 
-## Deployment
+## ☁️ Deployment Guidelines
 
-### Backend (Railway or similar)
-- Set service root directory to `backend/`.
-- Build command: `pip install -r requirements.txt`
-- Start command: `bash start.sh`
-- Required environment variables:
-  - `GEMINI_API_KEY`
-  - `WEAVIATE_API_KEY`
-  - `WEAVIATE_URL`
+<details>
+<summary><b>Backend (Railway, Render, etc.)</b></summary>
 
-Why `start.sh`:
-- It binds to platform-provided `PORT`, which is required for Railway-style hosting.
+- Set Root Directory: `backend/`
+- Build CMD: `pip install -r requirements.txt`
+- Start CMD: `bash start.sh` (Required to map to platform-provided `$PORT`)
+- Remember to inject your `GEMINI_API_KEY`, `WEAVIATE_API_KEY`, and `WEAVIATE_URL` environment variables.
+</details>
 
-### Frontend (Vercel)
-- Set project root to `frontend/`.
-- Build command: `npm run build`
-- Output directory: `dist`
-- Configure frontend environment variables to point to your deployed backend.
-- SPA rewrites are configured in `frontend/vercel.json`.
+<details>
+<summary><b>Frontend (Vercel, Netlify)</b></summary>
 
-## Production Considerations
-- Restrict CORS in `backend/main.py` to your frontend domain (currently permissive for development).
-- Treat all API keys as secrets and store them only in deployment environment settings.
-- Review generated-query execution logic before exposing publicly.
+- Set Root Directory: `frontend/`
+- Build CMD: `npm run build`
+- Output Dir: `dist`
+- Configure `frontend/vercel.json` SPA rewrites and environment variables to route to your production backend.
+</details>
 
-## Troubleshooting
+---
 
-If `pip install -r requirements.txt` fails:
-- Confirm you are in the `backend/` directory.
-- Use Python 3.11+.
-- Create and activate a virtual environment before installing.
-- Upgrade installer tooling:
-```
-python -m pip install --upgrade pip setuptools wheel
-```
+## 🛡️ Production & Security Considerations
 
-## Engineering Decisions & Trade-offs
+- **Restrict CORS:** Limit origins in `backend/main.py` explicitly to your frontend domain payload in production.
+- **Secrets Management:** Treat all API keys strictly as secrets securely stored in environmental key vaults.
+- **Review Vector Executions:** Periodically sanitize and review generated-query patterns before wide-scale public exposure to prevent abuse.
 
-- **Weaviate for Vector DB (Hybrid Search):** Selected Weaviate Cloud to gain both raw vector search (semantic retrieval) and metadata filtering. This solves the limitation of traditional databases when users search with natural language while preserving hard filters like language or stars.
-- **`all-MiniLM-L6-v2` Embeddings:** Picked this sentence-transformers model for highly efficient, low-latency text embeddings that run easily locally and inside standard Docker environments without needing expensive GPU hosts.
-- **Gemini AI Query Parsing:** Leveraged Gemini to dynamically convert user intent into Python Weaviate queries, handling complex nested logical parsing which would be difficult to implement with static heuristics.
+<br />
+
+---
+<div align="center">
+  <sub>Built with ❤️ by Abhinavbajpai30 and AI Assistant </sub>
+</div>
