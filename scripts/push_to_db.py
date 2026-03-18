@@ -11,7 +11,7 @@ load_dotenv()
 
 def main():
     print("🚀 Loading repos data...")
-    with open('github_repos_enriched_final_main.json', 'r', encoding='utf-8') as f:
+    with open('../data/github_repos_enriched_final_main.json', 'r', encoding='utf-8') as f:
         data = json.load(f)
     
     repos = data['repositories']
