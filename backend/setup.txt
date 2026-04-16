@@ -1,0 +1,10 @@
+Repo API relevant info:
+name
+owner.login
+fork
+stargazers_count
+language
+languages_url - fetch
+open_issues_count
+topics
+pushed_at

@@ -1,0 +1,220 @@
+import os
+import json
+import logging
+from typing import Dict, Any, Optional
+import google.generativeai as genai
+
+logger = logging.getLogger(__name__)
+
+class GeminiQueryGenerator:
+    """Uses Google Gemini to generate MongoDB queries from natural language"""
+    
+    def __init__(self):
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY not found in environment variables")
+        
+        genai.configure(api_key=api_key)
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        logger.info("Gemini AI initialized successfully")
+    
+    def generate_search_query(self, user_query: str) -> Dict[str, Any]:
+        """
+        Generate MongoDB query for semantic search based on user's natural language query.
+        
+        Args:
+            user_query: The user's search query
+            
+        Returns:
+            MongoDB query dict with filter conditions
+        """
+        
+        prompt = f"""You are a MongoDB query expert. Given a user's search query for finding GitHub repositories, 
+generate a MongoDB aggregation pipeline that will find the most relevant repositories.
+
+The MongoDB collection schema is:
+- name (string): Repository name
+- owner (string): Repository owner
+- description (string): Repository description
+- stars (int): Number of stars
+- languages (array of strings): Programming languages used
+- issues (int): Number of open issues
+- topics (array of strings): Repository topics/tags
+- pushed_at (string): Last push date
+- readme (string): README content (cleaned)
+- embedding (array of floats): Vector embedding for semantic search
+- last_crawled (timestamp): When repo was last crawled
+
+Your task:
+1. Parse the user query to extract:
+   - Programming languages mentioned (JavaScript, Python, Go, Rust, TypeScript, Java, C++, C#, Ruby, PHP, Swift, Kotlin, etc.)
+   - Topics/domains (web-development, machine-learning, devops, api, cli, database, security, etc.)
+   - Project type keywords (framework, library, tool, application, etc.)
+   - Size preferences (popular, trending, stars count)
+   
+2. Generate a MongoDB filter query (NOT aggregation pipeline) that includes:
+   - Language filters using $in operator on 'languages' array
+   - Topic filters using $all or $in operator on 'topics' array
+   - Star range using $gte and $lte on 'stars' field
+   - Text search on 'name' and 'description' fields using $regex (case-insensitive)
+   
+3. Return ONLY a valid JSON object with these fields:
+   - "filter": MongoDB filter query object
+   - "sort": Sort criteria (e.g., {{"stars": -1}})
+   - "explanation": Brief explanation of the query logic
+
+Rules:
+- Use case-insensitive regex for text matching: {{"$regex": "pattern", "$options": "i"}}
+- For multiple conditions, use $and or $or appropriately
+- Default sort by stars descending if not specified
+- Keep the query simple and efficient
+- DO NOT include vector search operations (those are handled separately)
+- Return ONLY valid JSON, no markdown, no explanations outside the JSON
+
+User Query: "{user_query}"
+
+Output JSON:"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Clean up response (remove markdown code blocks if present)
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+            
+            # Parse JSON
+            query_data = json.loads(response_text)
+            
+            logger.info(f"Generated query for '{user_query}': {json.dumps(query_data, indent=2)}")
+            return query_data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini response as JSON: {e}")
+            logger.error(f"Raw response: {response_text}")
+            # Fallback to basic text search
+            return {
+                "filter": {
+                    "$or": [
+                        {"name": {"$regex": user_query, "$options": "i"}},
+                        {"description": {"$regex": user_query, "$options": "i"}}
+                    ]
+                },
+                "sort": {"stars": -1},
+                "explanation": "Fallback query due to parsing error"
+            }
+        except Exception as e:
+            logger.error(f"Error generating query with Gemini: {e}")
+            raise
+    
+    def generate_personalized_query(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate MongoDB query based on user preferences for personalized recommendations.
+        
+        Args:
+            preferences: User preference data including domains, role, expertise, languages
+            
+        Returns:
+            MongoDB query dict with filter conditions and scoring logic
+        """
+        
+        prompt = f"""You are a MongoDB query expert specializing in personalized recommendations. 
+Given a user's preferences for finding GitHub repositories, generate a MongoDB query that matches their interests.
+
+The MongoDB collection schema is:
+- name (string): Repository name
+- owner (string): Repository owner
+- description (string): Repository description
+- stars (int): Number of stars
+- languages (array of strings): Programming languages used
+- issues (int): Number of open issues
+- topics (array of strings): Repository topics/tags
+- pushed_at (string): Last push date (ISO format)
+- readme (string): README content
+- embedding (array of floats): Vector embedding
+
+User Preferences:
+{json.dumps(preferences, indent=2)}
+
+Domain to Topic Mapping (use these to map user domains to repository topics):
+- "Frontend / Web" → ["frontend", "web", "react", "vue", "angular", "css", "html", "ui", "ux"]
+- "Backend / APIs" → ["backend", "api", "rest", "graphql", "server", "nodejs", "express", "fastapi", "django"]
+- "Mobile (iOS/Android)" → ["mobile", "ios", "android", "react-native", "flutter", "swift", "kotlin"]
+- "ML / AI / Data Science" → ["machine-learning", "deep-learning", "artificial-intelligence", "data-science", "pytorch", "tensorflow", "nlp"]
+- "DevOps / Infrastructure" → ["devops", "infrastructure", "kubernetes", "docker", "ci-cd", "terraform", "monitoring"]
+- "Game Development" → ["game", "gamedev", "game-engine", "unity", "unreal", "godot"]
+- "Cybersecurity" → ["security", "cybersecurity", "cryptography", "penetration-testing"]
+
+Expertise Level to Star Range Mapping:
+- "Beginner" → Focus on well-documented projects (stars: 1000-10000)
+- "Medium" → Mix of established and emerging (stars: 500-50000)
+- "Advanced" → Include cutting-edge and complex projects (stars: 100-100000)
+
+Your task:
+1. Map primaryDomains to relevant topics using the mapping above
+2. Use preferredLanguages to filter by 'languages' field
+3. Adjust star range based on expertise level
+4. Consider role: Students might prefer educational repos, Engineers prefer production-ready tools
+5. Prioritize recently updated projects (pushed_at within last 2 years)
+
+Generate a MongoDB filter query that:
+- Uses $in for languages matching preferredLanguages
+- Uses $in for topics matching mapped domains
+- Uses $gte and $lte for star range based on expertise
+- Filters for recent activity (pushed_at > "2023-01-01")
+- Combines conditions with $and
+
+Return ONLY a valid JSON object:
+{{
+  "filter": {{ MongoDB filter object }},
+  "sort": {{ sort criteria, default by stars descending }},
+  "limit": 20,
+  "explanation": "Brief explanation"
+}}
+
+Output JSON:"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            response_text = response.text.strip()
+            
+            # Clean up response
+            if response_text.startswith("```json"):
+                response_text = response_text[7:]
+            if response_text.startswith("```"):
+                response_text = response_text[3:]
+            if response_text.endswith("```"):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+            
+            # Parse JSON
+            query_data = json.loads(response_text)
+            
+            logger.info(f"Generated personalized query: {json.dumps(query_data, indent=2)}")
+            return query_data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse Gemini response as JSON: {e}")
+            logger.error(f"Raw response: {response_text}")
+            # Fallback query based on languages
+            fallback_filter = {}
+            if preferences.get("preferredLanguages"):
+                fallback_filter["languages"] = {"$in": preferences["preferredLanguages"]}
+            
+            return {
+                "filter": fallback_filter if fallback_filter else {},
+                "sort": {"stars": -1},
+                "limit": 20,
+                "explanation": "Fallback query due to parsing error"
+            }
+        except Exception as e:
+            logger.error(f"Error generating personalized query with Gemini: {e}")
+            raise
+
+# Global instance
+gemini_generator = GeminiQueryGenerator()
