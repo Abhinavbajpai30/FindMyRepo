@@ -141,7 +141,7 @@ class RecommendationService:
         
         # Recency (weight: 0.1)
         pushed_at = repo.get("pushed_at", "")
-        if pushed_at and "2024" in pushed_at or "2025" in pushed_at or "2026" in pushed_at:
+        if pushed_at and any(year in pushed_at for year in ["2024", "2025", "2026"]):
             score += 0.1
         
         return score

@@ -6,30 +6,59 @@ import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
+ALLOWED_FILTER_FIELDS = {
+    "name", "owner", "description", "stars", "languages",
+    "issues", "topics", "pushed_at", "forks",
+}
+ALLOWED_MONGO_LOGICAL_OPS = {"$and", "$or", "$nor"}
+ALLOWED_SORT_FIELDS = {"stars", "forks", "pushed_at", "name", "issues", "watchers_count"}
+MAX_QUERY_LENGTH = 500
+
+
+def _sanitize_filter(filter_dict: Any) -> Dict[str, Any]:
+    """Recursively strip any keys not in the field allowlist from a Gemini-generated filter."""
+    if not isinstance(filter_dict, dict):
+        return {}
+    result = {}
+    for key, value in filter_dict.items():
+        if key in ALLOWED_MONGO_LOGICAL_OPS:
+            if isinstance(value, list):
+                result[key] = [_sanitize_filter(item) for item in value]
+        elif key in ALLOWED_FILTER_FIELDS:
+            result[key] = value
+    return result
+
+
+def _sanitize_sort(sort_dict: Any) -> Dict[str, int]:
+    """Keep only allowed sort fields with valid directions."""
+    if not isinstance(sort_dict, dict):
+        return {"stars": -1}
+    sanitized = {
+        k: v for k, v in sort_dict.items()
+        if k in ALLOWED_SORT_FIELDS and v in (1, -1)
+    }
+    return sanitized if sanitized else {"stars": -1}
+
+
 class GeminiQueryGenerator:
     """Uses Google Gemini to generate MongoDB queries from natural language"""
-    
+
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
-        
+
         genai.configure(api_key=api_key)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         logger.info("Gemini AI initialized successfully")
-    
+
     def generate_search_query(self, user_query: str) -> Dict[str, Any]:
         """
         Generate MongoDB query for semantic search based on user's natural language query.
-        
-        Args:
-            user_query: The user's search query
-            
-        Returns:
-            MongoDB query dict with filter conditions
         """
-        
-        prompt = f"""You are a MongoDB query expert. Given a user's search query for finding GitHub repositories, 
+        safe_query = user_query[:MAX_QUERY_LENGTH].replace('"', '\\"')
+
+        prompt = f"""You are a MongoDB query expert. Given a user's search query for finding GitHub repositories,
 generate a MongoDB aggregation pipeline that will find the most relevant repositories.
 
 The MongoDB collection schema is:
@@ -42,8 +71,6 @@ The MongoDB collection schema is:
 - topics (array of strings): Repository topics/tags
 - pushed_at (string): Last push date
 - readme (string): README content (cleaned)
-- embedding (array of floats): Vector embedding for semantic search
-- last_crawled (timestamp): When repo was last crawled
 
 Your task:
 1. Parse the user query to extract:
@@ -51,13 +78,13 @@ Your task:
    - Topics/domains (web-development, machine-learning, devops, api, cli, database, security, etc.)
    - Project type keywords (framework, library, tool, application, etc.)
    - Size preferences (popular, trending, stars count)
-   
+
 2. Generate a MongoDB filter query (NOT aggregation pipeline) that includes:
    - Language filters using $in operator on 'languages' array
    - Topic filters using $all or $in operator on 'topics' array
    - Star range using $gte and $lte on 'stars' field
    - Text search on 'name' and 'description' fields using $regex (case-insensitive)
-   
+
 3. Return ONLY a valid JSON object with these fields:
    - "filter": MongoDB filter query object
    - "sort": Sort criteria (e.g., {{"stars": -1}})
@@ -71,15 +98,14 @@ Rules:
 - DO NOT include vector search operations (those are handled separately)
 - Return ONLY valid JSON, no markdown, no explanations outside the JSON
 
-User Query: "{user_query}"
+User Query: "{safe_query}"
 
 Output JSON:"""
 
         try:
             response = self.model.generate_content(prompt)
             response_text = response.text.strip()
-            
-            # Clean up response (remove markdown code blocks if present)
+
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
             if response_text.startswith("```"):
@@ -87,22 +113,22 @@ Output JSON:"""
             if response_text.endswith("```"):
                 response_text = response_text[:-3]
             response_text = response_text.strip()
-            
-            # Parse JSON
+
             query_data = json.loads(response_text)
-            
+
+            query_data["filter"] = _sanitize_filter(query_data.get("filter", {}))
+            query_data["sort"] = _sanitize_sort(query_data.get("sort", {"stars": -1}))
+
             logger.info(f"Generated query for '{user_query}': {json.dumps(query_data, indent=2)}")
             return query_data
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Gemini response as JSON: {e}")
-            logger.error(f"Raw response: {response_text}")
-            # Fallback to basic text search
             return {
                 "filter": {
                     "$or": [
-                        {"name": {"$regex": user_query, "$options": "i"}},
-                        {"description": {"$regex": user_query, "$options": "i"}}
+                        {"name": {"$regex": safe_query, "$options": "i"}},
+                        {"description": {"$regex": safe_query, "$options": "i"}}
                     ]
                 },
                 "sort": {"stars": -1},
@@ -111,19 +137,17 @@ Output JSON:"""
         except Exception as e:
             logger.error(f"Error generating query with Gemini: {e}")
             raise
-    
+
     def generate_personalized_query(self, preferences: Dict[str, Any]) -> Dict[str, Any]:
         """
         Generate MongoDB query based on user preferences for personalized recommendations.
-        
-        Args:
-            preferences: User preference data including domains, role, expertise, languages
-            
-        Returns:
-            MongoDB query dict with filter conditions and scoring logic
         """
-        
-        prompt = f"""You are a MongoDB query expert specializing in personalized recommendations. 
+        safe_preferences = {
+            k: v for k, v in preferences.items()
+            if isinstance(v, (str, int, float, bool, list))
+        }
+
+        prompt = f"""You are a MongoDB query expert specializing in personalized recommendations.
 Given a user's preferences for finding GitHub repositories, generate a MongoDB query that matches their interests.
 
 The MongoDB collection schema is:
@@ -136,10 +160,9 @@ The MongoDB collection schema is:
 - topics (array of strings): Repository topics/tags
 - pushed_at (string): Last push date (ISO format)
 - readme (string): README content
-- embedding (array of floats): Vector embedding
 
 User Preferences:
-{json.dumps(preferences, indent=2)}
+{json.dumps(safe_preferences, indent=2)}
 
 Domain to Topic Mapping (use these to map user domains to repository topics):
 - "Frontend / Web" → ["frontend", "web", "react", "vue", "angular", "css", "html", "ui", "ux"]
@@ -182,8 +205,7 @@ Output JSON:"""
         try:
             response = self.model.generate_content(prompt)
             response_text = response.text.strip()
-            
-            # Clean up response
+
             if response_text.startswith("```json"):
                 response_text = response_text[7:]
             if response_text.startswith("```"):
@@ -191,21 +213,21 @@ Output JSON:"""
             if response_text.endswith("```"):
                 response_text = response_text[:-3]
             response_text = response_text.strip()
-            
-            # Parse JSON
+
             query_data = json.loads(response_text)
-            
+
+            query_data["filter"] = _sanitize_filter(query_data.get("filter", {}))
+            query_data["sort"] = _sanitize_sort(query_data.get("sort", {"stars": -1}))
+
             logger.info(f"Generated personalized query: {json.dumps(query_data, indent=2)}")
             return query_data
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse Gemini response as JSON: {e}")
-            logger.error(f"Raw response: {response_text}")
-            # Fallback query based on languages
             fallback_filter = {}
             if preferences.get("preferredLanguages"):
                 fallback_filter["languages"] = {"$in": preferences["preferredLanguages"]}
-            
+
             return {
                 "filter": fallback_filter if fallback_filter else {},
                 "sort": {"stars": -1},
@@ -215,6 +237,7 @@ Output JSON:"""
         except Exception as e:
             logger.error(f"Error generating personalized query with Gemini: {e}")
             raise
+
 
 # Global instance
 gemini_generator = GeminiQueryGenerator()

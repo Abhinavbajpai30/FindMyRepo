@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 load_dotenv()
 
 # Setup logging
+os.makedirs("logs", exist_ok=True)
 log_filename = f"logs/ingestion_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 logging.basicConfig(
     level=logging.INFO,
@@ -408,7 +409,7 @@ def fetch_repos(query="", sort="updated", order="desc", per_page=100):
             languages_list = get_languages(owner, name)
             readme = get_readme(owner, name)
 
-            if languages_list==None or readme==None or name=="" or description=="":
+            if languages_list is None or readme is None or name == "" or description == "":
                 logger.info(f"Skipped ({i+1}/{total}) - {repo.get('owner', {}).get('login', '')}/{repo.get('name', '')} (Incomplete info)")
                 continue
 
@@ -444,6 +445,7 @@ def fetch_repos(query="", sort="updated", order="desc", per_page=100):
 
     except Exception as e:
         logger.error(f"Error occurred while fetching repos: {e}")
+        return False
 
 
 def main():
