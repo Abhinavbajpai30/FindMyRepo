@@ -8,21 +8,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
+# Load environment variables before importing services that require them at import time.
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+
 from models import (
     SearchRequest, SearchResponse,
     UserPreferencesRequest, UserPreferencesResponse,
     AllReposResponse, HiddenGemsResponse,
+    RepoDetailResponse,
 )
 from database import db_instance
 from services.search import SearchService
 from services.recommendations import RecommendationService
 from services.repository import RepositoryService
-from utils.helpers import transform_repos_list, calculate_pagination_metadata
+from utils.helpers import transform_repo_to_response, transform_repos_list, calculate_pagination_metadata
 
-ALLOWED_SORT_FIELDS = {"stars", "forks", "pushed_at", "name", "issues", "watchers_count"}
-
-# Load environment variables
-load_dotenv()
+# Frontend sort values use response field names (updated_at, open_issues).
+# The service maps these internally to MongoDB field names.
+ALLOWED_SORT_FIELDS = {
+    "stars", "forks", "name", "issues",
+    "updated_at",    # mapped → pushed_at in MongoDB
+    "open_issues",   # mapped → issues in MongoDB
+}
 
 # Setup logging
 logging.basicConfig(
@@ -66,7 +73,7 @@ app = FastAPI(
 )
 
 # CORS Configuration
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8080").split(",")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -89,7 +96,7 @@ async def root():
 async def health_check():
     try:
         collection = db_instance.get_collection()
-        count = collection.count_documents({})
+        count = collection.estimated_document_count()
         return {
             "status": "healthy",
             "database": "connected",
@@ -153,11 +160,15 @@ async def get_all_repositories(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("stars", description="Sort field"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order"),
     languages: Optional[str] = Query(None, description="Comma-separated language names"),
     topics: Optional[str] = Query(None, description="Comma-separated topic names"),
     min_stars: Optional[int] = Query(None, ge=0, description="Minimum stars"),
     max_stars: Optional[int] = Query(None, ge=0, description="Maximum stars"),
+    min_forks: Optional[int] = Query(None, ge=0, description="Minimum forks"),
+    max_forks: Optional[int] = Query(None, ge=0, description="Maximum forks"),
+    has_issues: Optional[bool] = Query(None, description="Only repos with open issues"),
+    has_wiki: Optional[bool] = Query(None, description="Only repos with a wiki"),
     name_contains: Optional[str] = Query(None, description="Repository name contains"),
     description_contains: Optional[str] = Query(None, description="Description contains"),
     is_hacktoberfest: Optional[bool] = Query(None, description="Hacktoberfest repos"),
@@ -181,6 +192,10 @@ async def get_all_repositories(
             "topics": topics,
             "min_stars": min_stars,
             "max_stars": max_stars,
+            "min_forks": min_forks,
+            "max_forks": max_forks,
+            "has_issues": has_issues,
+            "has_wiki": has_wiki,
             "name_contains": name_contains,
             "description_contains": description_contains,
             "is_hacktoberfest": is_hacktoberfest,
@@ -225,7 +240,7 @@ async def get_hidden_gems(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     sort_by: str = Query("stars", description="Sort field"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$", description="Sort order")
+    sort_order: str = Query("desc", pattern="^(asc|desc)$", description="Sort order")
 ):
     if sort_by not in ALLOWED_SORT_FIELDS:
         raise HTTPException(
@@ -266,6 +281,29 @@ async def get_hidden_gems(
     except Exception as e:
         logger.error(f"Error in hidden gems endpoint: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch hidden gems")
+
+
+@app.get("/repo/{owner}/{name}", response_model=RepoDetailResponse)
+async def get_repo_detail(owner: str, name: str):
+    try:
+        logger.info(f"Repo detail request: {owner}/{name}")
+
+        if not repository_service:
+            raise HTTPException(status_code=503, detail="Repository service not initialized")
+
+        doc = repository_service.get_repo(owner, name)
+        if doc is None:
+            raise HTTPException(status_code=404, detail=f"Repository {owner}/{name} not found")
+
+        transformed = transform_repo_to_response(doc)
+        transformed["readme"] = doc.get("readme")
+        return RepoDetailResponse(**transformed)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching repo detail {owner}/{name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch repository")
 
 
 @app.exception_handler(Exception)

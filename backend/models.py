@@ -24,24 +24,12 @@ class RepositoryResponse(BaseModel):
     languages: List[str] = Field(default_factory=list)
     topics: List[str] = Field(default_factory=list)
     stars: int = 0
+    forks: int = 0
     open_issues: int = 0
     updated_at: Optional[str] = None
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "name": "fastapi",
-                "full_name": "tiangolo/fastapi",
-                "description": "FastAPI framework, high performance",
-                "url": "https://github.com/tiangolo/fastapi",
-                "language": "Python",
-                "languages": ["Python", "HTML"],
-                "topics": ["web", "api", "framework"],
-                "stars": 68000,
-                "open_issues": 123,
-                "updated_at": "2026-02-10T12:00:00Z"
-            }
-        }
+
+class RepoDetailResponse(RepositoryResponse):
+    readme: Optional[str] = None
 
 class SearchResponse(BaseModel):
     success: bool = True

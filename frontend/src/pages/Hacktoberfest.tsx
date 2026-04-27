@@ -223,7 +223,12 @@ const Hacktoberfest = () => {
                 <div className="space-y-2">
                   {['JavaScript', 'HTML', 'Python', 'CSS', 'Markdown', 'TypeScript'].map((lang) => (
                     <label key={lang} className="flex items-center space-x-2 cursor-pointer">
-                      <input type="checkbox" className="rounded border-border" defaultChecked />
+                      <input
+                        type="checkbox"
+                        className="rounded border-border"
+                        checked={selectedLanguages.includes(lang)}
+                        onChange={(e) => handleLanguageChange(lang, e.target.checked)}
+                      />
                       <span className="text-sm text-muted-foreground">{lang}</span>
                     </label>
                   ))}
@@ -234,22 +239,23 @@ const Hacktoberfest = () => {
               <div className="mb-6">
                 <h4 className="text-sm font-medium text-foreground mb-3">Star Count</h4>
                 <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="stars" className="border-border" defaultChecked />
-                    <span className="text-sm text-muted-foreground">All</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="stars" className="border-border" />
-                    <span className="text-sm text-muted-foreground">Less than 50K</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="stars" className="border-border" />
-                    <span className="text-sm text-muted-foreground">50K - 200K</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="radio" name="stars" className="border-border" />
-                    <span className="text-sm text-muted-foreground">200K+</span>
-                  </label>
+                  {[
+                    { value: 'all', label: 'All' },
+                    { value: 'less-1k', label: 'Less than 1K' },
+                    { value: '1k-10k', label: '1K - 10K' },
+                    { value: '10k+', label: '10K+' },
+                  ].map(({ value, label }) => (
+                    <label key={value} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="stars"
+                        className="border-border"
+                        checked={starRange === value}
+                        onChange={() => setStarRange(value)}
+                      />
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
@@ -257,23 +263,29 @@ const Hacktoberfest = () => {
               <div className="mb-6">
                 <h4 className="text-sm font-medium text-foreground mb-3">Activity</h4>
                 <div className="space-y-2">
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" className="rounded border-border" defaultChecked />
-                    <span className="text-sm text-muted-foreground">Active (recent commits)</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" className="rounded border-border" />
-                    <span className="text-sm text-muted-foreground">Medium activity</span>
-                  </label>
-                  <label className="flex items-center space-x-2 cursor-pointer">
-                    <input type="checkbox" className="rounded border-border" />
-                    <span className="text-sm text-muted-foreground">Low activity</span>
-                  </label>
+                  {[
+                    { value: 'active', label: 'Active (recent commits)' },
+                    { value: 'medium', label: 'Medium activity' },
+                    { value: 'inactive', label: 'Low activity' },
+                  ].map(({ value, label }) => (
+                    <label key={value} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="rounded border-border"
+                        checked={selectedActivities.includes(value)}
+                        onChange={(e) => handleActivityChange(value, e.target.checked)}
+                      />
+                      <span className="text-sm text-muted-foreground">{label}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
 
               {/* Clear Filters Button */}
-              <button className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
+              <button
+                onClick={clearFilters}
+                className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+              >
                 Clear Filters
               </button>
             </div>

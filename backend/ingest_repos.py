@@ -417,12 +417,17 @@ def fetch_repos(query="", sort="updated", order="desc", per_page=100):
 
             vector = generate_embeddings(to_embed)
 
+            forks = repo.get("forks_count", 0)
+            has_wiki = repo.get("has_wiki", False)
+
             document = {
                 "github_id": repo_id,
                 "name": name,
                 "owner": owner,
                 "description": description,
                 "stars": stars,
+                "forks": forks,
+                "has_wiki": has_wiki,
                 "languages": languages_list,
                 "issues": issues,
                 "topics": topics,

@@ -580,8 +580,6 @@ const AllRepos = () => {
                 <option value="open_issues-asc">Least Issues</option>
                 <option value="name-asc">Name A-Z</option>
                 <option value="name-desc">Name Z-A</option>
-                <option value="created_at-desc">Newest Created</option>
-                <option value="created_at-asc">Oldest Created</option>
               </select>
             </div>
           </div>

@@ -5,13 +5,24 @@ from pymongo.collection import Collection
 
 logger = logging.getLogger(__name__)
 
+# Frontend uses response field names (updated_at, open_issues) for sorting;
+# map them to the actual MongoDB document field names.
+_SORT_FIELD_MAP = {
+    "updated_at": "pushed_at",
+    "open_issues": "issues",
+}
+
 
 def _recent_cutoff(days: int) -> str:
     return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
 
 
+def _resolve_sort_field(field: str) -> str:
+    return _SORT_FIELD_MAP.get(field, field)
+
+
 class RepositoryService:
-    """Handles repository listing, filtering, and pagination"""
+    """Handles repository listing, filtering, pagination, and detail lookup."""
 
     def __init__(self, collection: Collection):
         self.collection = collection
@@ -28,19 +39,23 @@ class RepositoryService:
             mongo_filter = self._build_filter(filters or {})
             skip = (page - 1) * limit
             sort_direction = -1 if sort_order == "desc" else 1
+            mongo_sort_field = _resolve_sort_field(sort_by)
 
             total_count = self.collection.count_documents(mongo_filter)
 
-            logger.info(f"Querying all repos: page={page}, limit={limit}, sort_by={sort_by}, "
-                        f"filter_count={len(mongo_filter)}, total={total_count}")
+            logger.info(
+                f"Querying all repos: page={page}, limit={limit}, sort_by={mongo_sort_field}, "
+                f"filter_count={len(mongo_filter)}, total={total_count}"
+            )
 
             cursor = self.collection.find(
                 mongo_filter,
                 {
-                    "name": 1, "owner": 1, "description": 1, "stars": 1,
-                    "languages": 1, "topics": 1, "issues": 1, "pushed_at": 1, "_id": 0
+                    "name": 1, "owner": 1, "description": 1, "stars": 1, "forks": 1,
+                    "languages": 1, "topics": 1, "issues": 1, "pushed_at": 1,
+                    "has_wiki": 1, "_id": 0
                 }
-            ).sort(sort_by, sort_direction).skip(skip).limit(limit)
+            ).sort(mongo_sort_field, sort_direction).skip(skip).limit(limit)
 
             results = list(cursor)
             logger.info(f"Returning {len(results)} repositories from page {page}")
@@ -67,17 +82,18 @@ class RepositoryService:
 
             skip = (page - 1) * limit
             sort_direction = -1 if sort_order == "desc" else 1
+            mongo_sort_field = _resolve_sort_field(sort_by)
             total_count = self.collection.count_documents(mongo_filter)
 
-            logger.info(f"Querying hidden gems: page={page}, limit={limit}, sort_by={sort_by}, total={total_count}")
+            logger.info(f"Querying hidden gems: page={page}, limit={limit}, sort_by={mongo_sort_field}, total={total_count}")
 
             cursor = self.collection.find(
                 mongo_filter,
                 {
-                    "name": 1, "owner": 1, "description": 1, "stars": 1,
+                    "name": 1, "owner": 1, "description": 1, "stars": 1, "forks": 1,
                     "languages": 1, "topics": 1, "issues": 1, "pushed_at": 1, "_id": 0
                 }
-            ).sort(sort_by, sort_direction).skip(skip).limit(limit)
+            ).sort(mongo_sort_field, sort_direction).skip(skip).limit(limit)
 
             results = list(cursor)
             logger.info(f"Returning {len(results)} hidden gems from page {page}")
@@ -85,6 +101,22 @@ class RepositoryService:
 
         except Exception as e:
             logger.error(f"Error in get_hidden_gems: {e}")
+            raise
+
+    def get_repo(self, owner: str, name: str) -> Optional[Dict[str, Any]]:
+        """Fetch a single repository by owner and name, including README."""
+        try:
+            doc = self.collection.find_one(
+                {"owner": owner, "name": name},
+                {
+                    "name": 1, "owner": 1, "description": 1, "stars": 1, "forks": 1,
+                    "languages": 1, "topics": 1, "issues": 1, "pushed_at": 1,
+                    "readme": 1, "_id": 0
+                }
+            )
+            return doc
+        except Exception as e:
+            logger.error(f"Error in get_repo for {owner}/{name}: {e}")
             raise
 
     def _build_filter(self, filters: Dict[str, Any]) -> Dict[str, Any]:
@@ -112,16 +144,30 @@ class RepositoryService:
         if star_conditions:
             mongo_filter["stars"] = star_conditions
 
+        # Fork range
+        fork_conditions = {}
+        if filters.get("min_forks") is not None:
+            fork_conditions["$gte"] = int(filters["min_forks"])
+        if filters.get("max_forks") is not None:
+            fork_conditions["$lte"] = int(filters["max_forks"])
+        if fork_conditions:
+            mongo_filter["forks"] = fork_conditions
+
+        # Boolean feature filters
+        if filters.get("has_issues"):
+            mongo_filter["issues"] = {"$gt": 0}
+        if filters.get("has_wiki"):
+            mongo_filter["has_wiki"] = True
+
         # Name / description text search
         if filters.get("name_contains"):
             mongo_filter["name"] = {"$regex": filters["name_contains"], "$options": "i"}
         if filters.get("description_contains"):
             mongo_filter["description"] = {"$regex": filters["description_contains"], "$options": "i"}
 
-        # Boolean category flags — collect topic conditions to merge with $and
+        # Program category flags
         if filters.get("is_hacktoberfest"):
             topic_conditions.append({"topics": {"$in": ["hacktoberfest"]}})
-
         if filters.get("is_gsoc"):
             topic_conditions.append({"topics": {"$in": ["gsoc", "google-summer-of-code"]}})
 
@@ -131,7 +177,7 @@ class RepositoryService:
         elif len(topic_conditions) > 1:
             mongo_filter["$and"] = topic_conditions
 
-        # Underrated: override stars only if not already set
+        # Underrated: override stars (only if not already set by explicit star filters)
         if filters.get("is_underrated"):
             mongo_filter["stars"] = {"$gte": 50, "$lt": 500}
             mongo_filter["pushed_at"] = {"$gte": _recent_cutoff(730)}  # ~2 years

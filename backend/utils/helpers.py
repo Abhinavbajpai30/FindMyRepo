@@ -31,6 +31,7 @@ def transform_repo_to_response(repo: Dict[str, Any]) -> Dict[str, Any]:
         "languages": languages,
         "topics": repo.get("topics", []),
         "stars": repo.get("stars", 0),
+        "forks": repo.get("forks", 0),
         "open_issues": repo.get("issues", 0),
         "updated_at": repo.get("pushed_at", "")
     }

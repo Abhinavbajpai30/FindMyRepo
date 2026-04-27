@@ -42,7 +42,7 @@ class Database:
     
     def get_collection(self) -> Collection:
         """Get the repos collection"""
-        if not self.collection:
+        if self.collection is None:
             raise RuntimeError("Database not connected. Call connect() first.")
         return self.collection
 

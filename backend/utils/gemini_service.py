@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from typing import Dict, Any, Optional
-import google.generativeai as genai
+from google import genai
 
 logger = logging.getLogger(__name__)
 
@@ -48,8 +48,8 @@ class GeminiQueryGenerator:
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables")
 
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        self.client = genai.Client(api_key=api_key)
+        self.model = "gemini-flash-latest"
         logger.info("Gemini AI initialized successfully")
 
     def generate_search_query(self, user_query: str) -> Dict[str, Any]:
@@ -103,7 +103,7 @@ User Query: "{safe_query}"
 Output JSON:"""
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model, contents=prompt)
             response_text = response.text.strip()
 
             if response_text.startswith("```json"):
@@ -203,7 +203,7 @@ Return ONLY a valid JSON object:
 Output JSON:"""
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(model=self.model, contents=prompt)
             response_text = response.text.strip()
 
             if response_text.startswith("```json"):

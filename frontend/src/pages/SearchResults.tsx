@@ -1,8 +1,8 @@
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import RepoCard, { RepoData } from '@/components/RepoCard';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Search, Share2, Check } from 'lucide-react';
 import TetrisLoading from '@/components/ui/tetris-loader';
 
 // API Configuration from environment variables
@@ -312,19 +312,25 @@ const fallbackLocalSearch = (query: string): RepoData[] => {
 const SearchResults = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const query = location.state?.query || '';
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Accept query from either router state or URL ?q= param
+  const initialQuery = location.state?.query || searchParams.get('q') || '';
 
   const [searchResults, setSearchResults] = useState<RepoData[]>([]);
-  const [currentQuery, setCurrentQuery] = useState(query);
+  const [currentQuery, setCurrentQuery] = useState(initialQuery);
+  const [submittedQuery, setSubmittedQuery] = useState(initialQuery);
   const [isLoading, setIsLoading] = useState(false);
-
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (query) {
+    if (initialQuery) {
       setIsLoading(true);
-      
-      // Search without artificial delay
-      searchRepositories(query)
+      setSubmittedQuery(initialQuery);
+      setCurrentQuery(initialQuery);
+      setSearchParams({ q: initialQuery }, { replace: true });
+
+      searchRepositories(initialQuery)
         .then((results) => {
           setSearchResults(results);
           setIsLoading(false);
@@ -337,26 +343,33 @@ const SearchResults = () => {
     } else {
       setSearchResults([]);
     }
-  }, [query]);
+  }, []);
 
   const handleSearch = async () => {
     if (currentQuery.trim()) {
       setIsLoading(true);
-      
+      setSubmittedQuery(currentQuery);
+      setSearchParams({ q: currentQuery }, { replace: true });
+
       try {
-        // Search without artificial delay
         const results = await searchRepositories(currentQuery);
         setSearchResults(results);
         setIsLoading(false);
-        
-        // Update URL state
-        navigate('/search', { state: { query: currentQuery } });
-        
       } catch (error) {
         console.error('Search error:', error);
         setSearchResults([]);
         setIsLoading(false);
       }
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // fallback: select the URL bar
     }
   };
 
@@ -431,10 +444,17 @@ const SearchResults = () => {
                 <h2 className="text-2xl font-bold text-foreground mb-2">
                   Search Results
                 </h2>
-            <p className="text-muted-foreground">
-                  Found {searchResults.length} repositories matching "{currentQuery}"
-            </p>
-          </div>
+                <p className="text-muted-foreground mb-4">
+                  Found {searchResults.length} repositories matching "{submittedQuery}"
+                </p>
+                <button
+                  onClick={handleShare}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground border border-border rounded-lg hover:bg-secondary transition-colors"
+                >
+                  {copied ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
+                  {copied ? 'Link copied!' : 'Share search'}
+                </button>
+              </div>
               
               <div className="grid grid-cols-1 gap-6 mb-12">
                 {searchResults.map((repo, index) => (
@@ -452,10 +472,10 @@ const SearchResults = () => {
             ))}
           </div>
             </>
-          ) : query ? (
+          ) : submittedQuery ? (
             <div className="text-center py-12">
               <div className="text-muted-foreground text-lg mb-4">
-                No repositories found matching "{query}"
+                No repositories found matching "{submittedQuery}"
               </div>
               <p className="text-sm text-muted-foreground">
                 Try searching for different keywords or check your spelling

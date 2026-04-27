@@ -1,6 +1,7 @@
 import { Badge } from './ui/badge';
-import { Star, Clock, ExternalLink, GitBranch, AlertCircle } from 'lucide-react';
+import { Star, Clock, ExternalLink, GitBranch, AlertCircle, Bookmark, BookmarkCheck } from 'lucide-react';
 import { Button } from './ui/button';
+import { useBookmarks } from '@/contexts/BookmarksContext';
 
 export interface RepoData {
   name: string;
@@ -23,7 +24,7 @@ interface RepoCardProps {
 const getChargingColor = (status: 'active' | 'medium' | 'inactive') => {
   const colors = {
     'active': 'bg-green-500',
-    'medium': 'bg-yellow-500', 
+    'medium': 'bg-yellow-500',
     'inactive': 'bg-red-500'
   };
   return colors[status];
@@ -114,50 +115,64 @@ const getLanguageColor = (language: string) => {
     'Less': 'bg-blue-500',
     'PostCSS': 'bg-purple-500',
   };
-  
+
   return colors[language] || 'bg-gray-500';
 };
 
 const RepoCard = ({ repo, isHighlight = false }: RepoCardProps) => {
+  const { isBookmarked, addBookmark, removeBookmark } = useBookmarks();
+  const bookmarked = isBookmarked(repo.url);
+
   const formatLastActivity = (lastActivity: string) => {
     try {
-      // Check if it's an ISO date format
       if (lastActivity.includes('T') && lastActivity.includes('Z')) {
         const date = new Date(lastActivity);
         const now = new Date();
         const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-        
-        if (diffInSeconds < 60) {
-          return 'Just now';
-        } else if (diffInSeconds < 3600) {
+
+        if (diffInSeconds < 60) return 'Just now';
+        if (diffInSeconds < 3600) {
           const minutes = Math.floor(diffInSeconds / 60);
           return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
-        } else if (diffInSeconds < 86400) {
+        }
+        if (diffInSeconds < 86400) {
           const hours = Math.floor(diffInSeconds / 3600);
           return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-        } else if (diffInSeconds < 2592000) {
+        }
+        if (diffInSeconds < 2592000) {
           const days = Math.floor(diffInSeconds / 86400);
           return `${days} day${days > 1 ? 's' : ''} ago`;
-        } else if (diffInSeconds < 31536000) {
+        }
+        if (diffInSeconds < 31536000) {
           const months = Math.floor(diffInSeconds / 2592000);
           return `${months} month${months > 1 ? 's' : ''} ago`;
-        } else {
-          const years = Math.floor(diffInSeconds / 31536000);
-          return `${years} year${years > 1 ? 's' : ''} ago`;
         }
+        const years = Math.floor(diffInSeconds / 31536000);
+        return `${years} year${years > 1 ? 's' : ''} ago`;
       }
-      // If it's already in a readable format, return as is
       return lastActivity;
-    } catch (error) {
-      // If parsing fails, return the original string
+    } catch {
       return lastActivity;
     }
   };
 
+  const handleCardClick = () => {
+    window.open(repo.url, '_blank');
+  };
+
+  const toggleBookmark = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (bookmarked) {
+      removeBookmark(repo.url);
+    } else {
+      addBookmark(repo);
+    }
+  };
+
   return (
-    <article 
+    <article
       className={`group bg-card border border-border rounded-xl p-5 hover:border-primary/30 hover:shadow-lg transition-all duration-300 cursor-pointer ${isHighlight ? 'border-primary/40 bg-primary/5' : ''}`}
-      onClick={() => window.open(repo.url, '_blank')}
+      onClick={handleCardClick}
     >
       {/* Header with name and charging status */}
       <div className="flex items-start justify-between mb-4">
@@ -189,18 +204,37 @@ const RepoCard = ({ repo, isHighlight = false }: RepoCardProps) => {
             {repo.description}
           </p>
         </div>
-        
-        <Button 
-          variant="ghost"
-          size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-primary flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation();
-            window.open(repo.url, '_blank');
-          }}
-        >
-          <ExternalLink className="h-4 w-4" />
-        </Button>
+
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Bookmark button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-primary transition-colors"
+            onClick={toggleBookmark}
+            title={bookmarked ? 'Remove bookmark' : 'Save repo'}
+          >
+            {bookmarked ? (
+              <BookmarkCheck className="h-4 w-4 text-primary" />
+            ) : (
+              <Bookmark className="h-4 w-4" />
+            )}
+          </Button>
+
+          {/* External link button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              window.open(repo.url, '_blank');
+            }}
+            title="Open on GitHub"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {/* Languages */}
@@ -217,7 +251,7 @@ const RepoCard = ({ repo, isHighlight = false }: RepoCardProps) => {
           </div>
         )}
       </div>
-      
+
       {/* Footer stats */}
       <div className="flex items-center justify-between text-sm">
         <div className="flex items-center gap-4">
@@ -230,7 +264,7 @@ const RepoCard = ({ repo, isHighlight = false }: RepoCardProps) => {
             <span className="font-medium">{repo.issues} issues</span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <Clock className="h-4 w-4" />
           <span className="text-xs">Updated {formatLastActivity(repo.lastActivity)}</span>
