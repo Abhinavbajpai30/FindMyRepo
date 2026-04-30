@@ -118,9 +118,9 @@ async def search_repositories(request: SearchRequest):
         if not search_service:
             raise HTTPException(status_code=503, detail="Search service not initialized")
 
-        results = await asyncio.to_thread(search_service.search, request.query, 20)
+        results = await asyncio.to_thread(search_service.search, request.query, request.limit)
         transformed_results = transform_repos_list(results)
-        return SearchResponse(success=True, results=transformed_results)
+        return SearchResponse(success=True, results=transformed_results, total_returned=len(transformed_results))
 
     except HTTPException:
         raise

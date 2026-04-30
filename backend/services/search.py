@@ -1,98 +1,65 @@
 import logging
 from typing import List, Dict, Any
 from pymongo.collection import Collection
-from utils.gemini_service import gemini_generator
 from utils.embeddings import embedding_generator
 
 logger = logging.getLogger(__name__)
 
+VECTOR_INDEX_NAME = "embedding_vector_index"
+
+
 class SearchService:
-    """Handles search operations combining MongoDB filtering with vector similarity"""
-    
+    """Semantic search via MongoDB Atlas Vector Search ($vectorSearch aggregation)."""
+
     def __init__(self, collection: Collection):
         self.collection = collection
-    
-    def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+
+    def search(self, query: str, limit: int = 60) -> List[Dict[str, Any]]:
         """
-        Perform hybrid search: Gemini-generated MongoDB query + vector similarity ranking.
-        
-        Args:
-            query: User's search query
-            limit: Maximum number of results to return
-            
-        Returns:
-            List of repository documents sorted by relevance
+        Embed the query with all-MiniLM-L6-v2 and run $vectorSearch across
+        all documents in the collection. Returns up to `limit` results ordered
+        by cosine similarity, each annotated with a `similarity_score`.
         """
         try:
-            # Step 1: Generate query embedding for vector similarity
-            logger.info(f"Generating embedding for query: {query}")
+            logger.info(f"Generating embedding for query: {query!r}")
             query_embedding = embedding_generator.generate(query)
-            
-            # Step 2: Use Gemini to generate MongoDB filter query
-            logger.info(f"Generating MongoDB query using Gemini for: {query}")
-            gemini_query = gemini_generator.generate_search_query(query)
-            
-            mongo_filter = gemini_query.get("filter", {})
-            mongo_sort = gemini_query.get("sort", {"stars": -1})
-            
-            logger.info(f"MongoDB Filter: {mongo_filter}")
-            logger.info(f"MongoDB Sort: {mongo_sort}")
-            
-            # Step 3: Query MongoDB with the generated filter
-            # First, get a larger pool of candidates (3x the limit)
-            candidate_limit = limit * 3
-            
-            cursor = self.collection.find(
-                mongo_filter,
+
+            pipeline = [
                 {
-                    "name": 1,
-                    "owner": 1,
-                    "description": 1,
-                    "stars": 1,
-                    "languages": 1,
-                    "topics": 1,
-                    "issues": 1,
-                    "pushed_at": 1,
-                    "embedding": 1,
-                    "_id": 0
-                }
-            ).sort(list(mongo_sort.items())).limit(candidate_limit)
-            
-            candidates = list(cursor)
-            logger.info(f"Found {len(candidates)} candidate repositories")
-            
-            if not candidates:
-                logger.warning("No repositories found matching the filter")
-                return []
-            
-            # Step 4: Calculate vector similarity for each candidate
-            for repo in candidates:
-                if "embedding" in repo and repo["embedding"]:
-                    similarity = embedding_generator.calculate_similarity(
-                        query_embedding, 
-                        repo["embedding"]
-                    )
-                    repo["similarity_score"] = similarity
-                else:
-                    repo["similarity_score"] = 0.0
-                
-                # Remove embedding from response (too large)
-                repo.pop("embedding", None)
-            
-            # Step 5: Re-rank by similarity score
-            candidates.sort(key=lambda x: x["similarity_score"], reverse=True)
-            
-            # Step 6: Return top results
-            results = candidates[:limit]
-            
-            logger.info(f"Returning top {len(results)} results")
+                    "$vectorSearch": {
+                        "index": VECTOR_INDEX_NAME,
+                        "path": "embedding",
+                        "queryVector": query_embedding,
+                        "numCandidates": limit * 10,
+                        "limit": limit,
+                    }
+                },
+                {
+                    "$addFields": {
+                        "similarity_score": {"$meta": "vectorSearchScore"}
+                    }
+                },
+                {
+                    "$project": {
+                        "name": 1, "owner": 1, "description": 1, "stars": 1,
+                        "languages": 1, "topics": 1, "issues": 1, "pushed_at": 1,
+                        "_id": 0, "similarity_score": 1,
+                    }
+                },
+            ]
+
+            results = list(self.collection.aggregate(pipeline))
+            logger.info(f"$vectorSearch returned {len(results)} results")
             if results:
-                logger.info(f"Top result: {results[0].get('name')} (similarity: {results[0].get('similarity_score', 0):.4f})")
-            
+                logger.info(
+                    f"Top result: {results[0].get('name')} "
+                    f"(score: {results[0].get('similarity_score', 0):.4f})"
+                )
             return results
-            
+
         except Exception as e:
             logger.error(f"Error in search service: {e}")
             raise
-    
+
+
 # Service will be initialized in main.py with collection

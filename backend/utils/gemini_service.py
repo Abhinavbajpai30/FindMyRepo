@@ -44,13 +44,20 @@ class GeminiQueryGenerator:
     """Uses Google Gemini to generate MongoDB queries from natural language"""
 
     def __init__(self):
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not found in environment variables")
-
-        self.client = genai.Client(api_key=api_key)
+        self._api_key = os.getenv("GEMINI_API_KEY")
+        self._client = None
         self.model = "gemini-flash-latest"
-        logger.info("Gemini AI initialized successfully")
+        if self._api_key:
+            self._client = genai.Client(api_key=self._api_key)
+            logger.info("Gemini AI initialized successfully")
+        else:
+            logger.warning("GEMINI_API_KEY not set — Gemini features unavailable")
+
+    @property
+    def client(self):
+        if self._client is None:
+            raise ValueError("GEMINI_API_KEY not found in environment variables")
+        return self._client
 
     def generate_search_query(self, user_query: str) -> Dict[str, Any]:
         """
