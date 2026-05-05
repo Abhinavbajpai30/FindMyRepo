@@ -89,7 +89,6 @@ const Home = () => {
       // 1. Check Local Storage first
       const cachedData = localStorage.getItem('personalizedRepos');
       if (cachedData) {
-        console.log("Loading repositories from local cache");
         setRepos(JSON.parse(cachedData));
         return;
       }
@@ -99,9 +98,6 @@ const Home = () => {
       setError(null);
 
       try {
-        // Replace with your actual backend URL
-
-        console.log("Fetching repositories from backend based on preferences:", preferences);
         const response = await fetch(USER_PREFERENCES_API, {
           method: 'POST',
           headers: {

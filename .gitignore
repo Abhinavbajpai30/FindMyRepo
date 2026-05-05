@@ -31,3 +31,5 @@ dist-ssr
 venv
 __pycache__
 *.e
+.pytest_cache
+.claude

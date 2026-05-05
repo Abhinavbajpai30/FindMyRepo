@@ -1,6 +1,6 @@
 # FindMyRepo — Backend API
 
-FastAPI backend for the FindMyRepo GitHub repository discovery platform. Provides intelligent natural language search, personalized recommendations, and advanced filtering powered by Google Gemini AI and vector embeddings.
+FastAPI backend for the FindMyRepo GitHub repository discovery platform. Provides semantic vector search, personalized recommendations, and advanced filtering powered by MongoDB Atlas Vector Search, Google Gemini AI, and `sentence-transformers` embeddings.
 
 ---
 
@@ -17,17 +17,18 @@ FastAPI backend for the FindMyRepo GitHub repository discovery platform. Provide
 - [API Reference](#api-reference)
 - [Architecture](#architecture)
 - [Project Structure](#project-structure)
+- [Tests](#tests)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Features
 
-- **Natural Language Search** — Users describe what they need in plain English; Gemini AI translates it into a precise MongoDB filter, combined with vector similarity ranking for relevance.
-- **Personalized Recommendations** — Matches repositories to a user's domains, languages, and expertise level using AI-generated queries and a multi-factor scoring algorithm.
-- **Advanced Filtering** — Filter the full repository catalogue by language, topics, star range, name/description text, and special categories (Hacktoberfest, GSoC, underrated).
-- **Hidden Gems** — Surfaces high-quality repositories with under 1,000 stars that are actively maintained and well-documented.
-- **Pagination & Sorting** — All list endpoints support cursor-based pagination and sorting by any supported field.
+- **Semantic Search** — Queries are embedded with `all-MiniLM-L6-v2` and matched against 43k+ repository embeddings via MongoDB Atlas Vector Search (HNSW, cosine similarity). Returns results ranked by relevance score, filtered to a `0.6` minimum threshold on the frontend.
+- **Personalized Recommendations** — Gemini AI maps a structured user profile (role, domains, preferred languages) into a MongoDB filter. Results are then re-ranked by a multi-factor scoring algorithm (language match 40%, domain topics 30%, popularity 20%, recency 10%).
+- **Advanced Filtering** — Filter the full repository catalog by language, topics, star/fork range, name/description text, and special categories (Hacktoberfest, GSoC, underrated).
+- **Hidden Gems** — Surfaces repositories with 100–1,000 stars that are actively maintained, have a non-empty README, and at least one open issue.
+- **Pagination & Sorting** — All list endpoints support page-based pagination and sorting by any supported field.
 
 ---
 
@@ -36,101 +37,85 @@ FastAPI backend for the FindMyRepo GitHub repository discovery platform. Provide
 | Layer | Technology |
 |---|---|
 | Web framework | FastAPI |
-| AI query generation | Google Gemini 2.5 Flash (`google-genai`) |
-| Semantic embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`, 384 dims) |
+| Semantic search | MongoDB Atlas Vector Search (HNSW, cosine similarity) |
+| Embeddings | `sentence-transformers` (`all-MiniLM-L6-v2`, 384 dims) |
+| AI recommendations | Google Gemini 2.5 Flash (`google-genai`) |
 | Database | MongoDB Atlas |
 | Data validation | Pydantic v2 |
 | ASGI server | Uvicorn |
+| Testing | pytest, mongomock, FastAPI TestClient |
 
 ---
 
 ## Prerequisites
 
-- Python 3.9+
-- A MongoDB Atlas cluster
+- Python 3.14+
+- A MongoDB Atlas cluster (free tier works)
 - A Google Gemini API key — [Get one here](https://aistudio.google.com/app/apikey)
-- A GitHub Personal Access Token — [Generate here](https://github.com/settings/tokens) (required only for data ingestion)
+- A GitHub Personal Access Token — [Generate here](https://github.com/settings/tokens) *(required only for data ingestion)*
 
 ---
 
 ## Installation
 
 ```bash
-# 1. Navigate to the backend directory
 cd backend
 
-# 2. Create and activate a virtual environment
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Copy and fill in environment variables
 cp .env.example .env
-# Edit .env with your credentials (see Environment Variables section below)
+# Edit .env with your credentials
 ```
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and fill in all required values.
+| Variable | Required | Description |
+|---|---|---|
+| `MONGO_URI` | Yes | MongoDB Atlas connection string |
+| `GEMINI_API_KEY` | Yes | Google Gemini API key |
+| `GITHUB_TOKEN` | Ingestion only | GitHub Personal Access Token |
+| `ALLOWED_ORIGINS` | No | Comma-separated frontend origins for CORS. Defaults to `localhost:5173,3000,8080` |
+| `HOST` | No | Server host (default: `0.0.0.0`) |
+| `PORT` | No | Server port (default: `8000`) |
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `MONGO_URI` | Yes | — | MongoDB Atlas connection string |
-| `GEMINI_API_KEY` | Yes | — | Google Gemini API key |
-| `GITHUB_TOKEN` | Yes (ingestion only) | — | GitHub Personal Access Token for data ingestion |
-| `ALLOWED_ORIGINS` | No | `http://localhost:5173,`<br>`http://localhost:3000,`<br>`http://localhost:8080` | Comma-separated list of frontend origins permitted by CORS |
-| `HOST` | No | `0.0.0.0` | Host address for the server |
-| `PORT` | No | `8000` | Port for the server |
-
-**Getting your MongoDB URI:**
-MongoDB Atlas → Your Cluster → Connect → Drivers → copy the connection string, replacing `<password>` with your actual password.
+**MongoDB URI format:**
+Atlas → Cluster → Connect → Drivers → copy the string and replace `<password>` with your actual password.
 
 ---
 
 ## Running the Server
 
-### Development (with auto-reload)
-
 ```bash
+# Development (auto-reload)
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-```
 
-### Standard
-
-```bash
-python main.py
-```
-
-### Production (multi-worker)
-
-```bash
+# Production (multi-worker)
 uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
 
 Once running:
 - API base: `http://localhost:8000`
-- Interactive docs (Swagger UI): `http://localhost:8000/docs`
-- Alternative docs (ReDoc): `http://localhost:8000/redoc`
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
 
 ---
 
 ## Data Ingestion
 
-The ingestion script populates MongoDB with GitHub repository data. It searches GitHub using a large set of curated queries, enriches each repo with full language lists, cleaned README content, and a vector embedding, then upserts the result into MongoDB.
+Populates MongoDB with GitHub repository data — fetches repos via the GitHub API, enriches each with full language lists and a cleaned README, generates a 384-dim embedding, then upserts into MongoDB.
 
 ```bash
 python ingest_repos.py
 ```
 
-**Notes:**
-- This is a long-running process. Logs are written to `logs/` automatically.
-- Progress is saved to `ingestion_state.json` so interrupted runs can resume where they left off.
-- Requires `GITHUB_TOKEN` and `MONGO_URI` to be set in `.env`.
-- The script respects GitHub's API rate limits and will pause automatically when limits are approached.
+- Progress is checkpointed to `ingestion_state.json` — interrupted runs resume where they left off.
+- GitHub rate limits are respected automatically.
+- Requires `GITHUB_TOKEN` and `MONGO_URI` in `.env`.
 
 ---
 
@@ -138,42 +123,33 @@ python ingest_repos.py
 
 ### 1. Standard Indexes
 
-Run the following in MongoDB Atlas Shell, Compass, or `mongosh`:
-
-```javascript
-use findmyrepo
-
-// Deduplication
-db.repos.createIndex({ "github_id": 1 }, { unique: true })
-
-// Sorting and pagination
-db.repos.createIndex({ "stars": -1, "pushed_at": -1 })
-db.repos.createIndex({ "pushed_at": -1 })
-
-// Filtering
-db.repos.createIndex({ "languages": 1 })
-db.repos.createIndex({ "topics": 1 })
-
-// Text search on name and description
-db.repos.createIndex({ "name": "text", "description": "text" })
-
-// Hidden gems query
-db.repos.createIndex({ "stars": 1, "pushed_at": -1 })
-```
-
-Alternatively, run the automated index creation script:
+Run once after ingestion to enable fast sorting and filtering:
 
 ```bash
 python scripts/create_indexes.py
 ```
 
+Or create manually in Atlas Shell / mongosh:
+
+```javascript
+use findmyrepo
+
+db.repos.createIndex({ "github_id": 1 }, { unique: true })
+db.repos.createIndex({ "stars": -1, "pushed_at": -1 })
+db.repos.createIndex({ "pushed_at": -1 })
+db.repos.createIndex({ "languages": 1 })
+db.repos.createIndex({ "topics": 1 })
+db.repos.createIndex({ "name": "text", "description": "text" })
+db.repos.createIndex({ "stars": 1, "pushed_at": -1 })
+```
+
 ### 2. Vector Search Index
 
-The semantic search feature requires a vector search index. This must be created manually in the Atlas UI:
+Required for `/search`. Must be created manually in the Atlas UI:
 
-1. Go to Atlas → Your Cluster → **Atlas Search** → **Create Search Index**
+1. Atlas → Cluster → **Atlas Search** → **Create Search Index**
 2. Select **Atlas Vector Search** → **JSON Editor**
-3. Use the following definition:
+3. Paste this definition:
 
 ```json
 {
@@ -188,75 +164,80 @@ The semantic search feature requires a vector search index. This must be created
 }
 ```
 
-4. Name the index `vector_index` and save.
+4. **Name the index `embedding_vector_index`** and save.
 
-> Without this index, the `/search` endpoint will still work using the Gemini-generated MongoDB filter alone, but results will not be ranked by semantic similarity.
+> The index name must match exactly. The search service references it as `embedding_vector_index`.
 
 ---
 
 ## API Reference
 
 ### `GET /`
-Health ping. Returns `200 OK` when the server is up.
+Health ping. Returns `{"status": "ok", "version": "1.0.0"}`.
 
 ---
 
 ### `GET /health`
-Detailed health check. Verifies the database connection and returns the total repository count.
+Verifies the database connection and returns the total repository count.
 
-**Response:**
 ```json
 {
   "status": "healthy",
   "database": "connected",
-  "repositories_count": 15000
+  "repositories_count": 43000
 }
 ```
 
 ---
 
 ### `POST /search`
-Natural language repository search using Gemini AI + vector similarity.
+Semantic repository search using MongoDB Atlas Vector Search.
 
-**Request body:**
+**Request:**
 ```json
 {
-  "query": "python machine learning framework for production"
+  "query": "beginner-friendly Python projects with good first issues",
+  "limit": 100
 }
 ```
+
+`limit` range: 10–150. Default: 60.
 
 **Response:**
 ```json
 {
   "success": true,
+  "total_returned": 87,
   "results": [
     {
-      "name": "mlflow",
-      "owner": "mlflow",
-      "description": "Open source platform for the ML lifecycle",
-      "stars": 18000,
-      "languages": ["Python"],
-      "topics": ["machine-learning", "mlops"],
-      "issues": 452,
-      "pushed_at": "2024-11-01T12:00:00Z"
+      "name": "cpython",
+      "full_name": "python/cpython",
+      "description": "The Python programming language",
+      "url": "https://github.com/python/cpython",
+      "language": "Python",
+      "languages": ["Python", "C"],
+      "stars": 62000,
+      "forks": 30000,
+      "open_issues": 8000,
+      "updated_at": "2025-04-01T10:00:00Z",
+      "similarity_score": 0.84
     }
   ]
 }
 ```
 
 **How it works:**
-1. The query is embedded into a 384-dimension vector using `all-MiniLM-L6-v2`.
-2. Gemini AI generates a MongoDB filter (languages, topics, star range, regex) from the natural language query.
-3. MongoDB returns up to 60 candidate repositories matching the filter.
-4. Each candidate is scored by cosine similarity against the query embedding.
-5. The top 20 results by similarity score are returned.
+1. Query is embedded into a 384-dim vector using `all-MiniLM-L6-v2`.
+2. A `$vectorSearch` aggregation pipeline runs against the `embedding_vector_index` (HNSW, cosine similarity).
+3. `numCandidates` is set to `limit × 10` to ensure high recall.
+4. Each result carries a `similarity_score` from Atlas. The frontend applies a `0.6` minimum threshold before rendering.
 
 ---
 
 ### `POST /userpreferences`
-Returns personalized repository recommendations based on user profile.
+Returns personalized repository recommendations from a user profile.
 
-**Request body:**
+**Request:**
 ```json
 {
   "primaryDomains": ["ML / AI / Data Science", "Backend / APIs"],
@@ -275,7 +256,7 @@ Returns personalized repository recommendations based on user profile.
 | `expertise` | `Beginner`, `Medium`, `Advanced` |
 | `preferredLanguages` | Any language name, e.g. `Python`, `TypeScript`, `Rust` |
 
-**How scoring works:**
+**Scoring weights:**
 
 | Factor | Weight |
 |---|---|
@@ -287,104 +268,74 @@ Returns personalized repository recommendations based on user profile.
 ---
 
 ### `GET /allrepos`
-Paginated list of all repositories with optional filtering and sorting.
-
-**Query parameters:**
+Paginated catalog with optional filtering and sorting.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `page` | int | `1` | Page number (1-indexed) |
-| `limit` | int | `20` | Results per page (max 100) |
-| `sort_by` | string | `stars` | Field to sort by. Allowed: `stars`, `forks`, `pushed_at`, `name`, `issues`, `watchers_count` |
+| `page` | int | `1` | Page number (min: 1) |
+| `limit` | int | `20` | Results per page (max: 100) |
+| `sort_by` | string | `stars` | `stars`, `forks`, `updated_at`, `open_issues`, `name` |
 | `sort_order` | string | `desc` | `asc` or `desc` |
-| `languages` | string | — | Comma-separated language names, e.g. `Python,Go` |
-| `topics` | string | — | Comma-separated topic names, e.g. `cli,devops` |
-| `min_stars` | int | — | Minimum star count |
-| `max_stars` | int | — | Maximum star count |
-| `name_contains` | string | — | Substring match on repository name |
+| `languages` | string | — | Comma-separated, e.g. `Python,Go` |
+| `topics` | string | — | Comma-separated, e.g. `cli,devops` |
+| `min_stars` / `max_stars` | int | — | Star range |
+| `min_forks` / `max_forks` | int | — | Fork range |
+| `has_issues` | bool | — | Only repos with open issues |
+| `has_wiki` | bool | — | Only repos with a wiki |
+| `name_contains` | string | — | Substring match on name (case-insensitive) |
 | `description_contains` | string | — | Substring match on description |
-| `is_hacktoberfest` | bool | — | Only Hacktoberfest-tagged repos |
-| `is_gsoc` | bool | — | Only GSoC-tagged repos |
-| `is_underrated` | bool | — | Repos with 50–500 stars, updated within 2 years |
-
-**Example:**
-```
-GET /allrepos?page=1&limit=20&languages=Rust&min_stars=500&sort_by=pushed_at&sort_order=desc
-```
+| `is_hacktoberfest` | bool | — | Hacktoberfest-tagged repos only |
+| `is_gsoc` | bool | — | GSoC-tagged repos only |
+| `is_underrated` | bool | — | 50–500 stars, active in last 2 years |
 
 ---
 
 ### `GET /hiddengem`
-Paginated list of hidden gem repositories.
+Paginated hidden gems feed.
 
-Criteria: 100–1,000 stars, updated within the last 18 months, non-empty README, at least 1 open issue.
+Criteria: 100–1,000 stars, updated within 18 months, non-empty README, at least 1 open issue.
 
-**Query parameters:** `page`, `limit`, `sort_by`, `sort_order` (same constraints as `/allrepos`).
+Parameters: `page`, `limit`, `sort_by`, `sort_order` (same constraints as `/allrepos`).
+
+---
+
+### `GET /repo/{owner}/{name}`
+Single repository detail including README content.
+
+Returns 404 if the owner/name combination is not found.
 
 ---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│                   Client                    │
-│              (React Frontend)               │
-└─────────────────────┬───────────────────────┘
-                      │  HTTP / JSON
-                      ▼
-┌─────────────────────────────────────────────┐
-│              FastAPI  (main.py)             │
-│  CORS · Lifespan · Request validation       │
-│  Global exception handler                  │
-│                                             │
-│  POST /search         POST /userpreferences │
-│  GET  /allrepos       GET  /hiddengem       │
-└──────┬──────────────────────────┬───────────┘
-       │                          │
-       ▼                          ▼
-┌─────────────┐          ┌────────────────────┐
-│ SearchService│         │RecommendationService│
-│             │          │ RepositoryService  │
-│  Embeddings │          │                    │
-│  Generator  │          │  Gemini Service    │
-└──────┬──────┘          └────────┬───────────┘
-       │                          │
-       └──────────────┬───────────┘
-                      ▼
-             ┌────────────────┐
-             │  MongoDB Atlas │
-             │  (repos)       │
-             └────────────────┘
-```
-
 ### Request flow — `/search`
 
 ```
 User query
-  → Generate 384-dim embedding (sentence-transformers)
-  → Generate MongoDB filter via Gemini AI
-  → Query MongoDB (up to 60 candidates)
-  → Score each candidate by cosine similarity
-  → Return top 20 by score
+  → Embed with all-MiniLM-L6-v2 (384 dims)
+  → $vectorSearch aggregation (embedding_vector_index, numCandidates = limit × 10)
+  → $addFields: similarity_score ($meta: "vectorSearchScore")
+  → Return results with scores
+  → Frontend filters score >= 0.6, renders 20 at a time
 ```
 
 ### Request flow — `/userpreferences`
 
 ```
-User profile (domains, languages, expertise)
-  → Gemini maps profile to MongoDB query
+User profile (domains, languages, role, expertise)
+  → Gemini AI generates MongoDB filter
   → MongoDB returns matching repos
-  → Score each repo (language + topic + stars + recency)
-  → Return top 20 by preference score
+  → Multi-factor preference scoring (language + domain + stars + recency)
+  → Return top results sorted by score
 ```
 
 ### Request flow — `/allrepos` and `/hiddengem`
 
 ```
 Query parameters
-  → Build MongoDB filter (language, topics, stars, flags)
-  → Count total matching documents
-  → Fetch paginated slice with sort
+  → _build_filter() constructs MongoDB query dict
+  → count_documents() for pagination total
+  → find().sort().skip().limit() for page slice
   → Return results + pagination metadata
 ```
 
@@ -394,59 +345,75 @@ Query parameters
 
 ```
 backend/
-├── main.py                  # FastAPI app, routes, lifespan, CORS
+├── main.py                  # FastAPI app, all routes, lifespan, CORS
 ├── models.py                # Pydantic request/response schemas
-├── database.py              # MongoDB connection manager (singleton)
+├── database.py              # MongoDB connection singleton
 ├── ingest_repos.py          # GitHub data ingestion script
-├── requirements.txt         # Python dependencies
-├── .env.example             # Environment variable template
-├── .env                     # Your credentials (never committed)
+├── requirements.txt
+├── .env.example
 │
 ├── services/
-│   ├── search.py            # Hybrid search: Gemini filter + vector similarity
+│   ├── search.py            # Atlas Vector Search pipeline
 │   ├── recommendations.py   # Personalized recommendations + preference scoring
-│   └── repository.py        # Filtering, pagination, hidden gems logic
+│   └── repository.py        # _build_filter, pagination, hidden gems, get_repo
 │
 ├── utils/
 │   ├── gemini_service.py    # Gemini AI client, prompt engineering, output sanitization
-│   ├── embeddings.py        # Sentence-transformers model, cosine similarity
-│   └── helpers.py           # Response transformation, pagination metadata
+│   ├── embeddings.py        # sentence-transformers model wrapper
+│   └── helpers.py           # transform_repo_to_response, pagination metadata
 │
 ├── scripts/
-│   └── create_indexes.py    # MongoDB index creation utility
+│   └── create_indexes.py    # MongoDB standard index creation
 │
-└── logs/                    # Ingestion log files (auto-created)
+└── tests/                   # 99 pytest tests
+    ├── conftest.py           # mongomock fixtures, sample data
+    ├── test_helpers.py
+    ├── test_repository.py
+    ├── test_search.py
+    ├── test_recommendations.py
+    └── test_api.py
 ```
+
+---
+
+## Tests
+
+```bash
+pytest tests/ -v
+```
+
+99 tests covering:
+- `test_helpers.py` — pure function unit tests for response transforms and pagination math
+- `test_repository.py` — `_build_filter` logic + DB operations via mongomock
+- `test_search.py` — `$vectorSearch` pipeline construction
+- `test_recommendations.py` — preference scoring function
+- `test_api.py` — all endpoints via FastAPI TestClient with mocked services
 
 ---
 
 ## Troubleshooting
 
-### `ValueError: GEMINI_API_KEY not found in environment variables`
-The app will not start without this key. Ensure `.env` exists, contains `GEMINI_API_KEY`, and that `load_dotenv()` can find it (it looks in the same directory as `main.py`).
+**`GEMINI_API_KEY not found`**
+Ensure `.env` exists in the `backend/` directory and contains `GEMINI_API_KEY`. `load_dotenv()` looks in the same directory as `main.py`.
 
-### `Failed to connect to MongoDB`
-1. Verify `MONGO_URI` is correct and the password contains no unescaped special characters.
-2. In MongoDB Atlas, go to **Network Access** and ensure your IP (or `0.0.0.0/0` for development) is whitelisted.
-3. Confirm the cluster is not paused.
+**`Failed to connect to MongoDB`**
+1. Verify `MONGO_URI` is correct and the password has no unescaped special characters (URL-encode `@`, `#`, etc.).
+2. In Atlas → **Network Access**, ensure your IP or `0.0.0.0/0` (dev only) is whitelisted.
+3. Confirm the cluster is not paused (free-tier clusters pause after 60 days of inactivity).
 
-### CORS error in browser
-The frontend origin is not in the `ALLOWED_ORIGINS` list. Either add it to `.env`:
+**CORS error in browser**
+Add your frontend origin to `ALLOWED_ORIGINS` in `.env`:
 ```
 ALLOWED_ORIGINS=http://localhost:5173,http://localhost:8080
 ```
-Or set it inline when starting the server:
-```bash
-ALLOWED_ORIGINS="http://localhost:8080" python main.py
-```
 
-### `/search` returns empty results
-1. Run `GET /health` — confirm `repositories_count` is non-zero. If it is zero, run the ingestion script first.
-2. Check that repositories in the database have the `embedding` field populated.
-3. Try a broader query term.
+**`/search` returns empty results**
+1. `GET /health` — confirm `repositories_count` is non-zero. If zero, run `ingest_repos.py`.
+2. Confirm the `embedding_vector_index` exists in Atlas Search and is in **Active** state.
+3. Verify documents in MongoDB have an `embedding` field (list of 384 floats).
 
-### Queries are slow
-Ensure MongoDB indexes have been created (see [MongoDB Atlas Setup](#mongodb-atlas-setup)). Without indexes, every query performs a full collection scan.
+**Queries are slow**
+Run `python scripts/create_indexes.py` to create the standard MongoDB indexes. Without indexes, list endpoints perform full collection scans.
 
-### `Collection objects do not implement truth value testing`
-Use `collection is None` instead of `not collection` when checking PyMongo collection objects. This is already fixed in `database.py`.
+**`Collection objects do not implement truth value testing`**
+Use `if collection is None:` instead of `if not collection:` when checking PyMongo collection objects.

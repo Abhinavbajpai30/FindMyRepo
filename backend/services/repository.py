@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import List, Dict, Any, Optional
 from pymongo.collection import Collection
 
@@ -14,7 +14,7 @@ _SORT_FIELD_MAP = {
 
 
 def _recent_cutoff(days: int) -> str:
-    return (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
+    return (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%dT00:00:00Z")
 
 
 def _resolve_sort_field(field: str) -> str:

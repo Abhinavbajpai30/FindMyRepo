@@ -6,7 +6,7 @@ from datetime import datetime
 
 class SearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query string")
-    limit: int = Field(default=60, ge=10, le=100, description="Maximum results to return")
+    limit: int = Field(default=60, ge=10, le=150, description="Maximum results to return")
 
 class UserPreferencesRequest(BaseModel):
     primaryDomains: List[str] = Field(default_factory=list, description="User's primary domains of interest")
@@ -28,6 +28,7 @@ class RepositoryResponse(BaseModel):
     forks: int = 0
     open_issues: int = 0
     updated_at: Optional[str] = None
+    similarity_score: Optional[float] = None
 
 class RepoDetailResponse(RepositoryResponse):
     readme: Optional[str] = None

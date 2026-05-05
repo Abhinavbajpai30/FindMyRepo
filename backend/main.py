@@ -119,7 +119,11 @@ async def search_repositories(request: SearchRequest):
             raise HTTPException(status_code=503, detail="Search service not initialized")
 
         results = await asyncio.to_thread(search_service.search, request.query, request.limit)
-        transformed_results = transform_repos_list(results)
+        transformed_results = []
+        for raw in results:
+            t = transform_repo_to_response(raw)
+            t["similarity_score"] = raw.get("similarity_score")
+            transformed_results.append(t)
         return SearchResponse(success=True, results=transformed_results, total_returned=len(transformed_results))
 
     except HTTPException:

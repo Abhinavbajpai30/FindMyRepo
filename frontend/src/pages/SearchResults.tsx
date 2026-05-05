@@ -7,12 +7,13 @@ import TetrisLoading from '@/components/ui/tetris-loader';
 
 const SEARCH_API_URL = import.meta.env.VITE_SEARCH_API_URL || 'http://localhost:8000/search';
 const PAGE_SIZE = 20;
+const MIN_SIMILARITY = 0.6;
 
 const searchRepositories = async (query: string): Promise<RepoData[]> => {
   const response = await fetch(SEARCH_API_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: query.trim(), limit: 60 }),
+    body: JSON.stringify({ query: query.trim(), limit: 100 }),
   });
 
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -20,19 +21,21 @@ const searchRepositories = async (query: string): Promise<RepoData[]> => {
   const data = await response.json();
 
   if (data.success && Array.isArray(data.results)) {
-    return data.results.map((repo: any) => ({
-      name: repo.name || 'Unknown',
-      description: repo.description || 'No description available',
-      languages: Array.isArray(repo.languages) && repo.languages.length > 0
-        ? repo.languages
-        : repo.language ? [repo.language] : ['Other'],
-      stars: parseInt(repo.stars || '0') || 0,
-      lastActivity: repo.updated_at || 'Unknown',
-      issues: parseInt(repo.open_issues || '0') || 0,
-      charging: repo.open_issues > 0 ? 'active' : 'medium',
-      url: repo.url || '#',
-      owner: repo.full_name ? repo.full_name.split('/')[0] : 'Unknown',
-    }));
+    return data.results
+      .filter((repo: any) => (repo.similarity_score ?? 1) >= MIN_SIMILARITY)
+      .map((repo: any) => ({
+        name: repo.name || 'Unknown',
+        description: repo.description || 'No description available',
+        languages: Array.isArray(repo.languages) && repo.languages.length > 0
+          ? repo.languages
+          : repo.language ? [repo.language] : ['Other'],
+        stars: parseInt(repo.stars || '0') || 0,
+        lastActivity: repo.updated_at || 'Unknown',
+        issues: parseInt(repo.open_issues || '0') || 0,
+        charging: repo.open_issues > 0 ? 'active' : 'medium',
+        url: repo.url || '#',
+        owner: repo.full_name ? repo.full_name.split('/')[0] : 'Unknown',
+      }));
   }
 
   return [];
@@ -118,11 +121,6 @@ const SearchResults = () => {
   const visibleResults = allResults.slice(0, visibleCount);
   const hasMore = visibleCount < allResults.length;
 
-  const statusText = () => {
-    if (allResults.length === 0) return null;
-    if (hasMore) return `Showing ${visibleCount} of ${allResults.length} results for "${submittedQuery}"`;
-    return `Showing all ${allResults.length} results for "${submittedQuery}"`;
-  };
 
   return (
     <div className="min-h-screen bg-background relative overflow-auto">
@@ -190,8 +188,7 @@ const SearchResults = () => {
             <>
               {/* Header */}
               <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-foreground mb-2">Search Results</h2>
-                <p className="text-muted-foreground mb-4">{statusText()}</p>
+                <h2 className="text-2xl font-bold text-foreground mb-4">Search Results</h2>
                 <button
                   onClick={handleShare}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground border border-border rounded-lg hover:bg-secondary transition-colors"
@@ -217,15 +214,9 @@ const SearchResults = () => {
                 <div ref={sentinelRef} className="flex justify-center py-6">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    Loading more results...
+                    Loading more...
                   </div>
                 </div>
-              )}
-
-              {!hasMore && allResults.length > PAGE_SIZE && (
-                <p className="text-center text-sm text-muted-foreground py-6">
-                  All {allResults.length} results loaded
-                </p>
               )}
             </>
           ) : submittedQuery && !isLoading ? (
